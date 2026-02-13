@@ -1,16 +1,31 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { resolveRequiredHomeDir } from "../infra/home-dir.js";
+import { expandHomePrefix, resolveRequiredHomeDir } from "../infra/home-dir.js";
 import { runCommandWithTimeout } from "../process/exec.js";
 import { isSubagentSessionKey } from "../routing/session-key.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveWorkspaceTemplateDir } from "./workspace-templates.js";
 
+function resolveWorkspaceEnvOverride(
+  env: NodeJS.ProcessEnv,
+  homedir: () => string,
+): string | undefined {
+  const raw = env.OPENCLAW_WORKSPACE_DIR?.trim() || env.CLAWDBOT_WORKSPACE_DIR?.trim() || undefined;
+  if (!raw) {
+    return undefined;
+  }
+  return path.resolve(expandHomePrefix(raw, { env, homedir }));
+}
+
 export function resolveDefaultAgentWorkspaceDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
 ): string {
+  const envOverride = resolveWorkspaceEnvOverride(env, homedir);
+  if (envOverride) {
+    return envOverride;
+  }
   const home = resolveRequiredHomeDir(env, homedir);
   const profile = env.OPENCLAW_PROFILE?.trim();
   if (profile && profile.toLowerCase() !== "default") {

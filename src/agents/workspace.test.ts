@@ -17,6 +17,26 @@ describe("resolveDefaultAgentWorkspaceDir", () => {
 
     expect(dir).toBe(path.join(path.resolve("/srv/openclaw-home"), ".openclaw", "workspace"));
   });
+
+  it("prefers OPENCLAW_WORKSPACE_DIR over home/profile defaults", () => {
+    const dir = resolveDefaultAgentWorkspaceDir({
+      OPENCLAW_WORKSPACE_DIR: "/data/workspace",
+      OPENCLAW_HOME: "/srv/openclaw-home",
+      OPENCLAW_PROFILE: "staging",
+      HOME: "/home/other",
+    } as NodeJS.ProcessEnv);
+
+    expect(dir).toBe(path.resolve("/data/workspace"));
+  });
+
+  it("supports legacy CLAWDBOT_WORKSPACE_DIR", () => {
+    const dir = resolveDefaultAgentWorkspaceDir({
+      CLAWDBOT_WORKSPACE_DIR: "/legacy/workspace",
+      HOME: "/home/other",
+    } as NodeJS.ProcessEnv);
+
+    expect(dir).toBe(path.resolve("/legacy/workspace"));
+  });
 });
 
 describe("loadWorkspaceBootstrapFiles", () => {

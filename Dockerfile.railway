@@ -8,39 +8,14 @@ RUN corepack enable
 
 WORKDIR /app
 
-# Debug: List files to see what's available
-RUN echo "=== Listing root directory ===" && ls -la / || true
-RUN echo "=== Listing /app directory ===" && ls -la /app || true
-
-# Copy package files
-COPY package.json ./
-COPY pnpm-workspace.yaml ./
-COPY .npmrc ./
-
-# Copy pnpm-lock.yaml if exists (use * wildcard for optional copy)
-COPY pnpm-lock.ya?ml ./ 2>/dev/null || echo "pnpm-lock.yaml not found, will use package.json"
-
-RUN echo "=== Files after COPY ===" && ls -la
-
-COPY ui/package.json ./ui/package.json
-COPY patches ./patches
-COPY scripts ./scripts
-
-RUN pnpm install --frozen-lockfile
-
 COPY . .
 
-# Debug: check what got copied
-RUN echo "=== After COPY . . ===" && ls -la /app/docs/reference/templates/ || echo "docs/reference/templates NOT FOUND"
-
-# Explicitly copy docs to ensure templates are included
-COPY docs ./docs
-
-# Debug: check after explicit COPY
-RUN echo "=== After COPY docs ===" && ls -la /app/docs/reference/templates/
-
-# Verify IDENTITY.md is present (will fail build if missing)
-RUN ls -la /app/docs/reference/templates/IDENTITY.md
+RUN if [ -f pnpm-lock.yaml ]; then \
+      pnpm install --frozen-lockfile; \
+    else \
+      echo "pnpm-lock.yaml not found in build context; falling back to non-frozen install"; \
+      pnpm install; \
+    fi
 
 RUN OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
@@ -49,11 +24,5 @@ RUN pnpm ui:build
 
 ENV NODE_ENV=production
 
-# Allow non-root user to write temp files during runtime/tests.
-RUN chown -R node:node /app
-
-# Security hardening: Run as non-root user
-USER node
-
 # Start gateway server
-CMD ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "8080", "--allow-unconfigured"]
+CMD ["sh", "-lc", "exec node dist/index.js gateway --bind lan --port 8080 --allow-unconfigured ${OPENCLAW_GATEWAY_TOKEN:+--token \"$OPENCLAW_GATEWAY_TOKEN\"}"]

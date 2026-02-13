@@ -17,8 +17,8 @@ COPY package.json ./
 COPY pnpm-workspace.yaml ./
 COPY .npmrc ./
 
-# Try to copy pnpm-lock.yaml (may fail if not present)
-COPY pnpm-lock.yaml ./
+# Copy pnpm-lock.yaml if exists (use * wildcard for optional copy)
+COPY pnpm-lock.ya?ml ./ 2>/dev/null || echo "pnpm-lock.yaml not found, will use package.json"
 
 RUN echo "=== Files after COPY ===" && ls -la
 

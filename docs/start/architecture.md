@@ -1,208 +1,250 @@
 # Архитектура
 
-Обзор технической архитектуры OpenClaw Bot.
+Обзор технической архитектуры проекта: как наши фичи (подписки, роли, оплата) работают поверх ядра OpenClaw Platform.
 
-## Общая схема
+## Принцип: ядро + обёртки
+
+Мы **НЕ** заменяем OpenClaw, а строим поверх него. Вся core-функциональность (Gateway, Agent, Sessions, Telegram channel, Tools, Models) — это ядро OpenClaw. Наши добавления — тонкие обёртки для монетизации и управления доступом.
 
 ```
-┌─────────────┐
-│  Telegram   │
-│   User      │
-└──────┬──────┘
-       │
-       ▼
-┌──────────────────────────────────┐
-│     grammY Bot Framework         │
-│  ┌────────────────────────────┐  │
-│  │  Message Handler           │  │
-│  │  ├─ Authorization Check    │  │
-│  │  ├─ Rate Limiting          │  │
-│  │  └─ Dispatch to Agent      │  │
-│  └────────────────────────────┘  │
-│                                  │
-│  ┌────────────────────────────┐  │
-│  │  Payment Handlers          │  │
-│  │  ├─ pre_checkout_query     │  │
-│  │  └─ successful_payment     │  │
-│  └────────────────────────────┘  │
-└──────────────┬───────────────────┘
-               │
-               ▼
-┌──────────────────────────────────┐
-│        User Store                │
-│  (users.json / SQLite)           │
-│  ├─ User records                 │
-│  ├─ Subscription status          │
-│  └─ Usage statistics             │
-└──────────────┬───────────────────┘
-               │
-               ▼
-┌──────────────────────────────────┐
-│      AI Agent Core               │
-│  ├─ Per-user sessions            │
-│  ├─ Context management           │
-│  ├─ Model routing                │
-│  └─ Tool execution               │
-└──────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                  Telegram User                          │
+└────────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│  НАША ОБЁРТКА: Access Control Layer                     │
+│  src/telegram/access-control.ts                         │
+│  src/telegram/user-store.ts                             │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │ 1. Получить userId из message.from                 │ │
+│  │ 2. Найти/создать UserRecord в User Store           │ │
+│  │ 3. Проверить роль, trial, подписку, лимиты         │ │
+│  │ 4. Разрешить → передать в ядро OpenClaw            │ │
+│  │    Запретить → показать prompt на подписку          │ │
+│  └────────────────────────────────────────────────────┘ │
+└────────────────────────┬────────────────────────────────┘
+                         │ (если доступ разрешён)
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│  ЯДРО OPENCLAW PLATFORM                                 │
+│                                                         │
+│  ┌─────────────────┐  ┌────────────────────────────┐    │
+│  │ Gateway WS API  │  │ Telegram Channel (grammY)  │    │
+│  │ Port 8080       │  │ Long-polling / Webhooks    │    │
+│  └─────────────────┘  └────────────────────────────┘    │
+│                                                         │
+│  ┌─────────────────┐  ┌────────────────────────────┐    │
+│  │ Agent Runtime   │  │ Session Management         │    │
+│  │ Pi embedded     │  │ Per-user isolation          │    │
+│  │ Tool streaming  │  │ Compaction & pruning        │    │
+│  └─────────────────┘  └────────────────────────────┘    │
+│                                                         │
+│  ┌─────────────────┐  ┌────────────────────────────┐    │
+│  │ Model Routing   │  │ Tools & Skills             │    │
+│  │ Anthropic, OAI  │  │ Browser, exec, web search  │    │
+│  │ Google, Ollama  │  │ Canvas, file ops           │    │
+│  └─────────────────┘  └────────────────────────────┘    │
+│                                                         │
+│  ┌─────────────────┐  ┌────────────────────────────┐    │
+│  │ Config System   │  │ Hooks & Plugins            │    │
+│  │ openclaw.json   │  │ Event-driven extensibility │    │
+│  └─────────────────┘  └────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Компоненты
+## Что даёт ядро OpenClaw (НЕ трогаем)
 
-### 1. Telegram Bot (grammY)
+Полная документация ядра: [docs.openclaw.ai](https://docs.openclaw.ai)
 
-**Технология**: grammY framework
-**Файлы**: `src/telegram/bot.ts`, `src/telegram/bot-message-context.ts`
+### Gateway
 
-Обрабатывает входящие сообщения и команды от пользователей:
+WebSocket API для управления соединениями. Уже встроено:
 
-- Получение сообщений от Telegram API
-- Парсинг команд (`/start`, `/subscribe`, и т.д.)
-- Deep linking (invite-коды, referral-ссылки)
-- Отправка ответов пользователям
+- Telegram/Discord/Slack/WhatsApp/Signal каналы
+- Health monitoring, heartbeat
+- Webchat Control UI
+- Nodes & device pairing
 
-### 2. Authorization Middleware
+Конфигурация: `openclaw.json` → `gateway: { port, auth, mode }`
 
-**Файлы**: `src/telegram/bot-message-context.ts`
+### Agent Runtime
 
-Проверяет права доступа перед обработкой сообщения:
+AI-агент с per-user sessions. Уже встроено:
 
-1. Получить `telegramUserId` из сообщения
-2. Загрузить `UserRecord` из User Store
-3. Проверить роль и лимиты (`checkAccess`)
-4. Разрешить/запретить/показать промпт на подписку
+- System prompt из AGENTS.md, SOUL.md, IDENTITY.md, TOOLS.md
+- Compaction (сжатие длинных сессий)
+- Tool streaming и block streaming
+- Multi-agent с sub-agents
+- Workspace bootstrapping из templates
 
-### 3. User Store
+Конфигурация: `openclaw.json` → `agents: { defaults, list }`
 
-**Файлы**: `src/store/user-store.ts` (планируется)
-**Хранилище**: `/data/.openclaw/users.json` или SQLite
+### Telegram Channel
 
-Хранит информацию о пользователях:
+Полная интеграция через grammY. Уже встроено:
+
+- Long-polling и webhook режимы
+- DM policy (pairing, allowlist, open)
+- Group support с requireMention
+- Custom commands registration
+- Media handling (images, audio, video, stickers)
+- Reply-to mode, link preview, stream mode
+- Retry policy, proxy support
+
+Конфигурация: `openclaw.json` → `channels: { telegram: { ... } }`
+
+### Config System
+
+Стандартная конфигурация через `~/.openclaw/openclaw.json`:
+
+```json5
+{
+  gateway: { mode: "local", port: 8080 },
+  channels: {
+    telegram: {
+      enabled: true,
+      botToken: "TOKEN",
+      dmPolicy: "open",
+      customCommands: [
+        { command: "plan", description: "Текущий план и статистика" },
+        { command: "subscribe", description: "Оформить подписку" },
+      ],
+    },
+  },
+  agents: {
+    defaults: {
+      model: { primary: "google/gemini-3-pro-preview" },
+    },
+  },
+}
+```
+
+CLI: `openclaw config get/set/unset` для управления.
+
+## Что добавляем мы (обёртки)
+
+### 1. User Store (`src/telegram/user-store.ts`)
+
+Хранит информацию о подписках и ролях пользователей. **Это НЕ замена OpenClaw sessions** — sessions управляют AI-контекстом, User Store управляет бизнес-логикой подписок.
 
 ```typescript
 type UserRecord = {
   telegramUserId: number;
-  username?: string;
-  firstName?: string;
   role: "owner" | "vip" | "subscriber" | "trial" | "expired";
-  createdAt: number;
+  messagesUsedToday: number;
+  lastMessageDate: string; // YYYY-MM-DD, сброс ежедневно
   trialExpiresAt?: number;
   subscriptionExpiresAt?: number;
-  subscriptionPlan?: "starter" | "premium";
-  messagesUsedToday: number;
-  lastMessageDate: string; // YYYY-MM-DD
-  totalTokensUsed: number;
-  totalCostUsd: number;
+  totalMessagesUsed: number;
 };
 ```
 
-### 4. Payment Handlers
+Хранилище: `/data/.openclaw/users.json` (атомарная запись через tmp + rename).
 
-**Технология**: Telegram Bot API (sendInvoice, Stars)
-**Файлы**: `src/telegram/payment-handlers.ts` (планируется)
+### 2. Access Control (`src/telegram/access-control.ts`)
 
-Обработка платежей через Telegram Stars:
+Тонкая прослойка перед ядром OpenClaw. Проверяет:
 
-**pre_checkout_query** (< 10 сек ответ обязателен):
+1. Trial не истёк?
+2. Подписка активна?
+3. Дневной лимит не превышен?
+4. → Разрешить → передать сообщение в Agent Runtime (ядро)
+5. → Запретить → показать prompt на подписку
 
-- Валидация пользователя
-- Проверка доступности плана
-- `answerPreCheckoutQuery(true)`
+### 3. Роли (`src/telegram/user-roles.ts`)
 
-**successful_payment**:
+Discriminated union с exhaustive checking:
 
-- Активация/продление подписки в User Store
-- Обновление `subscriptionExpiresAt` (+30 дней)
-- Сохранение `subscriptionChargeId` для refund
+| Роль         | Лимит сообщений | Источник               |
+| ------------ | --------------- | ---------------------- |
+| `owner`      | безлимит        | `ADMIN_TELEGRAM_IDS`   |
+| `vip`        | безлимит        | Invite-ссылка от owner |
+| `subscriber` | безлимит        | Оплата через Stars     |
+| `trial`      | 5/день          | Первый `/start`        |
+| `expired`    | 2/день          | Истёк trial/подписка   |
 
-### 5. Agent Core
+### 4. Подписочные команды (`src/telegram/bot-native-commands.ts`)
 
-**Файлы**: `src/agents/`, `src/session/`
+Команды зарегистрированные через стандартный механизм OpenClaw `customCommands`:
 
-Запуск AI-агента для обработки сообщения:
+- `/start` — приветствие, создание trial
+- `/plan` — текущий план и статистика
+- `/subscribe` — оформление подписки через Telegram Stars
 
-- **Per-user sessions** — изолированная память для каждого `telegramUserId`
-- **Context management** — загрузка истории сообщений
-- **Model routing** — выбор модели на основе тарифа
-- **Tool execution** — выполнение команд (web search, code execution, etc.)
+### 5. Payment Handlers (планируется)
 
-### 6. Rate Limiter
+Обработка Telegram Stars через grammY (уже встроен в ядро):
 
-**Файлы**: `src/telegram/rate-limiter.ts` (планируется)
-
-Проверка лимитов перед отправкой сообщения агенту:
-
-- Сброс счетчика `messagesUsedToday` если `lastMessageDate !== today`
-- Проверка `messagesUsedToday < limit[role]`
-- Инкремент счетчика при успешной отправке
+- `pre_checkout_query` — валидация перед оплатой
+- `successful_payment` — активация подписки в User Store
 
 ## Поток обработки сообщения
 
 ```
-1. Telegram API → grammY bot.on("message")
+1. Telegram API → grammY (ЯДРО OpenClaw)
    ↓
-2. Authorization Middleware
-   ├─ getUserRecord(telegramUserId)
-   ├─ checkAccess(user, messageType)
-   └─ allow / deny / prompt_subscribe
+2. Access Control Layer (НАША ОБЁРТКА)
+   ├─ getUserRecord(userId) из User Store
+   ├─ canSendMessage(user) — проверка роли/лимитов
+   └─ allowed → continue / denied → prompt subscribe
    ↓
-3. Rate Limiter
-   ├─ messagesUsedToday < limit?
-   └─ increment counter
-   ↓
-4. Agent Core
-   ├─ Load session (per-user)
-   ├─ Select model (based on plan)
-   ├─ Execute tools
+3. Agent Runtime (ЯДРО OpenClaw)
+   ├─ Load session (per-user, стандартный механизм)
+   ├─ Build context (AGENTS.md + SOUL.md + IDENTITY.md)
+   ├─ Select model (из openclaw.json)
+   ├─ Execute tools (browser, exec, web search)
    └─ Generate response
    ↓
-5. Send response to Telegram
-```
-
-## Поток оплаты
-
-```
-1. User → /subscribe
+4. Send response → Telegram (ЯДРО OpenClaw)
    ↓
-2. Bot → sendInvoice(currency: "XTR", subscription_period: 2592000)
-   ↓
-3. Telegram → показывает нативный UI оплаты
-   ↓
-4. User → оплачивает (2 тапа)
-   ↓
-5. Telegram → bot.on("pre_checkout_query")
-   ├─ Validate user/plan
-   └─ answerPreCheckoutQuery(true) [< 10 сек!]
-   ↓
-6. Telegram → bot.on("message:successful_payment")
-   ├─ Update User Store
-   ├─ subscriptionExpiresAt = now + 30 days
-   └─ Send confirmation message
-   ↓
-7. Через 30 дней → Telegram auto-renew
-   └─ successful_payment снова (если не отменено)
+5. Increment usage counter (НАША ОБЁРТКА)
+   └─ userStore.incrementUsage(userId, tokens, cost)
 ```
 
 ## Технологический стек
 
-| Компонент     | Технология                           |
-| ------------- | ------------------------------------ |
-| Bot Framework | grammY                               |
-| Runtime       | Node.js 22+ / Bun                    |
-| Language      | TypeScript                           |
-| Payment       | Telegram Stars                       |
-| Hosting       | Railway                              |
-| Database      | JSON / SQLite (планируется Postgres) |
-| AI Models     | OpenAI, Anthropic, и др.             |
+| Слой               | Технология                               | Источник |
+| ------------------ | ---------------------------------------- | -------- |
+| Платформа          | OpenClaw Platform                        | Ядро     |
+| Gateway            | WebSocket API                            | Ядро     |
+| Telegram           | grammY framework                         | Ядро     |
+| Agent Runtime      | Pi embedded runner                       | Ядро     |
+| Session Management | Per-user isolation, compaction           | Ядро     |
+| Model Routing      | Anthropic, OpenAI, Google, Ollama        | Ядро     |
+| Config             | openclaw.json                            | Ядро     |
+| **User Store**     | **JSON file (users.json)**               | Обёртка  |
+| **Access Control** | **Middleware перед agent dispatch**      | Обёртка  |
+| **Roles & Limits** | **Discriminated unions + daily counter** | Обёртка  |
+| **Payment**        | **Telegram Stars (через grammY)**        | Обёртка  |
+| Hosting            | Railway                                  | Деплой   |
 
-## Безопасность
+## Правила развития
 
-- **dmPolicy: "open"** — любой может написать боту
-- **dmScope: "per-peer"** — изолированные сессии для каждого пользователя
-- **Per-agent memory** — owner не видит сообщения публичных пользователей
-- **Rate limiting** — защита от спама и перерасхода
+1. **Не модифицировать ядро** — все наши фичи через обёртки, hooks, plugins
+2. **Использовать стандартную конфигурацию** — `openclaw.json`, не кастомный config.yaml
+3. **Обновлять из upstream** — следить за обновлениями OpenClaw Platform
+4. **Чётко разделять** — файлы ядра vs наши файлы (user-store, access-control, user-roles, owner-config)
+5. **Документировать что ядро, что обёртка** — в каждом файле
+
+## Официальная документация OpenClaw
+
+Полная документация ядра: [docs.openclaw.ai](https://docs.openclaw.ai)
+
+Ключевые разделы:
+
+- [Архитектура](https://docs.openclaw.ai/concepts/architecture)
+- [Конфигурация](https://docs.openclaw.ai/gateway/configuration)
+- [Telegram Channel](https://docs.openclaw.ai/channels/telegram)
+- [Agent Runtime](https://docs.openclaw.ai/concepts/agent)
+- [Sessions](https://docs.openclaw.ai/concepts/session)
+- [Hooks & Plugins](https://docs.openclaw.ai/tools/plugin)
+- [Tools](https://docs.openclaw.ai/tools)
+- [Skills](https://docs.openclaw.ai/tools/skills)
 
 ## Что дальше?
 
-- [Настройка бота](/admin/setup) — деплой и конфигурация
-- [База данных](/reference/database-schema) — структура User Store
-- [Payment Handlers](/telegram/payment-handlers) — имплементация оплаты
+- [Настройка бота](/admin/setup)
+- [Роли пользователей](/reference/user-roles)
+- [База данных User Store](/reference/database-schema)
+- [Тарифы и оплата](/payment/plans)

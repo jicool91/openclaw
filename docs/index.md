@@ -1,68 +1,89 @@
 # OpenClaw Bot
 
-**AI-ассистент в Telegram с системой подписки через Telegram Stars**
+**AI-ассистент в Telegram с подпиской через Telegram Stars — на базе платформы [OpenClaw](https://github.com/openclaw/openclaw)**
 
-OpenClaw Bot — это умный AI-ассистент, который работает прямо в Telegram. Общайтесь с мощной языковой моделью, получайте помощь в решении задач и управляйте подпиской через удобную систему оплаты Telegram Stars.
+OpenClaw Bot — это продукт, построенный на ядре **OpenClaw Platform** — open-source платформы для AI-агентов. Мы используем Gateway, Agent Runtime, Session Management и весь инструментарий OpenClaw, добавляя поверх него систему подписок, ролей и монетизации через Telegram Stars.
 
-## Ключевые возможности
+## Архитектура: ядро + обёртки
 
-- 🤖 **Умный AI-ассистент** на базе современных языковых моделей
-- 💬 **Работает прямо в Telegram** — не нужно устанавливать дополнительные приложения
-- ⭐ **Оплата через Telegram Stars** — безопасно и удобно
-- 👥 **Гибкая система доступа** — trial, подписка, VIP-приглашения
-- 📊 **Прозрачная аналитика** — отслеживайте использование и расходы
-- 🎯 **Разные тарифы** — от бесплатного trial до безлимитного premium
+```
+┌─────────────────────────────────────────────────┐
+│              Наши обёртки (wrappers)             │
+│  ┌─────────────┐ ┌──────────┐ ┌──────────────┐  │
+│  │ User Store  │ │ Подписки │ │ Telegram     │  │
+│  │ & Роли      │ │ & Stars  │ │ Stars Оплата │  │
+│  └─────────────┘ └──────────┘ └──────────────┘  │
+├─────────────────────────────────────────────────┤
+│         OpenClaw Platform (ядро)                │
+│  ┌──────────┐ ┌─────────┐ ┌──────────────────┐  │
+│  │ Gateway  │ │ Agent   │ │ Sessions, Tools, │  │
+│  │ WS API   │ │ Runtime │ │ Models, Memory   │  │
+│  └──────────┘ └─────────┘ └──────────────────┘  │
+│  ┌──────────┐ ┌─────────┐ ┌──────────────────┐  │
+│  │ Telegram │ │ Hooks & │ │ Config System    │  │
+│  │ (grammY) │ │ Plugins │ │ (openclaw.json)  │  │
+│  └──────────┘ └─────────┘ └──────────────────┘  │
+└─────────────────────────────────────────────────┘
+```
+
+**Принцип**: мы НЕ заменяем OpenClaw, а строим поверх него. Ядро обновляется из upstream, наши фичи — это обёртки вокруг стандартных механизмов.
+
+## Что даёт OpenClaw Platform (ядро)
+
+- **Gateway** — WebSocket API, управление соединениями, health monitoring
+- **Agent Runtime** — AI-агент с per-user sessions, context management, tool execution
+- **Telegram Channel** — полная интеграция через grammY (polling, webhooks, media, groups)
+- **Model Routing** — поддержка Anthropic, OpenAI, Google, Ollama и др.
+- **Tools & Skills** — browser, exec, web search, file ops, canvas
+- **Config System** — `openclaw.json` с hot-reload, $include, CLI config
+- **Hooks & Plugins** — расширение без модификации ядра
+- **Session Management** — изоляция, compaction, pruning
+
+## Что добавляем мы (обёртки)
+
+- ⭐ **Telegram Stars** — монетизация через встроенные платежи Telegram
+- 👥 **Система ролей** — owner, vip, subscriber, trial, expired
+- 📊 **User Store** — хранение подписок, статистики, лимитов
+- 🔒 **Access Control** — проверка прав перед обработкой сообщения
+- 🎟 **VIP Invite-ссылки** — бесплатный доступ для избранных
+- 📈 **Аналитика** — отслеживание использования и расходов
 
 ## Быстрый старт
 
 ### Для пользователей
 
-1. Откройте бота в Telegram: [@openclaw_jicool_bot](https://t.me/openclaw_jicool_bot)
-2. Нажмите `/start`
-3. Получите 7 дней бесплатного trial (5 сообщений в день)
-4. При необходимости оформите подписку через `/subscribe`
+1. Откройте бота: [@openclaw_jicool_bot](https://t.me/openclaw_jicool_bot)
+2. Нажмите `/start` — получите 7 дней бесплатного trial
+3. При необходимости: `/subscribe` для оформления подписки
 
 Подробнее: [Начало работы](/users/getting-started)
 
 ### Для администраторов
 
-1. Разверните бота на Railway или другом хостинге
-2. Настройте конфигурацию и переменные окружения
-3. Настройте систему оплаты Telegram Stars
-4. Управляйте пользователями через admin-команды
+1. Установите OpenClaw: `npm i -g openclaw@latest`
+2. Настройте `openclaw.json` (Telegram token, модели, агенты)
+3. Задеплойте на Railway или другой хостинг
+4. Настройте ADMIN_TELEGRAM_IDS для owner-доступа
 
 Подробнее: [Настройка бота](/admin/setup)
 
-## Архитектура
-
-OpenClaw Bot построен на следующих технологиях:
-
-- **grammY** — современный фреймворк для Telegram ботов
-- **Telegram Stars** — встроенная система оплаты
-- **Railway** — простой деплой и хостинг
-- **Per-user sessions** — изолированная память для каждого пользователя
-
-Подробнее: [Архитектура](/start/architecture)
-
 ## Система подписки
 
-### Типы пользователей
-
-| Тип            | Как получить           | Доступ                   |
+| Роль           | Как получить           | Доступ                   |
 | -------------- | ---------------------- | ------------------------ |
 | **trial**      | Первый `/start`        | 5 сообщений/день, 7 дней |
 | **subscriber** | Оплата через Stars     | 30+ сообщений/день       |
 | **vip**        | Invite-ссылка от owner | Полный доступ бесплатно  |
-| **owner**      | Hardcoded в конфиге    | Админ-права, без лимитов |
+| **owner**      | ADMIN_TELEGRAM_IDS     | Админ-права, без лимитов |
 
-Подробнее: [Тарифы](/payment/plans)
+Подробнее: [Тарифы](/payment/plans) | [Роли](/reference/user-roles)
 
-## Поддержка
+## Ссылки
 
-- 📖 [Документация](/)
-- 💬 [GitHub Issues](https://github.com/openclaw/openclaw/issues)
-- 🤖 [Telegram Bot](https://t.me/openclaw_jicool_bot)
+- [OpenClaw Platform (ядро)](https://github.com/openclaw/openclaw) — open-source проект
+- [Официальная документация OpenClaw](https://docs.openclaw.ai) — полная документация ядра
+- [GitHub Issues](https://github.com/openclaw/openclaw/issues)
 
 ---
 
-**Готовы начать?** → [Начало работы для пользователей](/users/getting-started) | [Настройка бота](/admin/setup)
+**Готовы начать?** [Для пользователей](/users/getting-started) | [Для администраторов](/admin/setup) | [Архитектура](/start/architecture)

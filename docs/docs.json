@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "OpenClaw Bot",
-  "description": "AI-ассистент в Telegram с системой подписки через Telegram Stars",
+  "description": "AI-ассистент в Telegram на базе OpenClaw Platform с подпиской через Telegram Stars",
   "theme": "mint",
   "icons": {
     "library": "lucide"
@@ -53,7 +53,7 @@
         "groups": [
           {
             "group": "Введение",
-            "pages": ["index", "start/features", "start/architecture"]
+            "pages": ["index", "start/features", "start/architecture", "start/roadmap"]
           },
           {
             "group": "Для пользователей",

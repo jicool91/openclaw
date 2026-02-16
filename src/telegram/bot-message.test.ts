@@ -144,7 +144,7 @@ describe("telegram bot message processor", () => {
         totalTokensUsed: 0,
         totalCostUsd: 0,
       });
-      userStore.updateUser = vi.fn().mockResolvedValue({
+      const updateUser = vi.fn().mockResolvedValue({
         telegramUserId: 8521810561,
         role: "owner",
         trialExpiresAt: null,
@@ -155,6 +155,7 @@ describe("telegram bot message processor", () => {
         totalTokensUsed: 0,
         totalCostUsd: 0,
       });
+      userStore.updateUser = updateUser;
       const processMessage = createTelegramMessageProcessor({
         ...baseDeps,
         userStore,
@@ -173,7 +174,7 @@ describe("telegram bot message processor", () => {
         {},
       );
 
-      expect(userStore.updateUser).toHaveBeenCalledWith(8521810561, {
+      expect(updateUser).toHaveBeenCalledWith(8521810561, {
         role: "owner",
         trialExpiresAt: null,
       });

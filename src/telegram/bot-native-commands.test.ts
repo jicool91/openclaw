@@ -250,7 +250,7 @@ describe("registerTelegramNativeCommands", () => {
         totalTokensUsed: 0,
         totalCostUsd: 0,
       });
-      userStore.updateUser = vi.fn().mockResolvedValue({
+      const updateUser = vi.fn().mockResolvedValue({
         telegramUserId: 8521810561,
         role: "owner",
         trialExpiresAt: null,
@@ -260,7 +260,8 @@ describe("registerTelegramNativeCommands", () => {
         totalMessagesUsed: 0,
         totalTokensUsed: 0,
         totalCostUsd: 0,
-      }) as never;
+      });
+      userStore.updateUser = updateUser as never;
 
       registerTelegramNativeCommands({
         ...buildParams({}, "default"),
@@ -284,7 +285,7 @@ describe("registerTelegramNativeCommands", () => {
         reply,
       });
 
-      expect(userStore.updateUser).toHaveBeenCalledWith(8521810561, {
+      expect(updateUser).toHaveBeenCalledWith(8521810561, {
         role: "owner",
         trialExpiresAt: null,
       });

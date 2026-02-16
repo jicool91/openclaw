@@ -56,7 +56,6 @@ import {
   resolveTelegramForumThreadId,
   resolveTelegramThreadSpec,
 } from "./bot/helpers.js";
-import { parseAdminTelegramIds } from "./owner-config.js";
 import { buildInlineKeyboard } from "./send.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";

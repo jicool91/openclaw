@@ -11,6 +11,7 @@ import {
   type TelegramMediaRef,
 } from "./bot-message-context.js";
 import { dispatchTelegramMessage } from "./bot-message-dispatch.js";
+import { isAdmin, parseAdminTelegramIds } from "./owner-config.js";
 
 /** Dependencies injected once when creating the message processor. */
 type TelegramMessageProcessorDeps = Omit<
@@ -51,6 +52,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     resolveBotTopicsEnabled,
     userStore,
   } = deps;
+  const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
 
   return async (
     primaryCtx: TelegramContext,
@@ -87,16 +89,23 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     const enforceAccessControl = chatType === "private";
     if (userId && enforceAccessControl) {
       try {
+        const adminUser = isAdmin(userId, adminIds);
         // Get or create user
         let user = await userStore.getUser(userId);
         if (!user) {
-          // New user - create with trial
+          // New user - create with owner role for admins, trial for others.
           user = await userStore.createUser({
             telegramUserId: userId,
             firstName: primaryCtx.message.from?.first_name,
             lastName: primaryCtx.message.from?.last_name,
             username: primaryCtx.message.from?.username,
-            role: "trial",
+            role: adminUser ? "owner" : "trial",
+          });
+        } else if (adminUser && user.role !== "owner") {
+          // Repair role drift: ADMIN_TELEGRAM_IDS must always stay owner.
+          user = await userStore.updateUser(userId, {
+            role: "owner",
+            trialExpiresAt: null,
           });
         }
 

@@ -216,6 +216,16 @@ pnpm openclaw channels status --probe
 
 ## Шаг 7: Деплой на Railway
 
+### 7.0 Если Railway уже настроен
+
+Если проект/сервис уже существуют и привязаны в вашей рабочей среде, пропустите шаг 7.1 и используйте helper-скрипт:
+
+```bash
+./scripts/railway-helper.sh status
+./scripts/railway-helper.sh env
+./scripts/railway-helper.sh logs
+```
+
 ### 7.1 Создайте проект на Railway
 
 1. [railway.app](https://railway.app) → Sign up
@@ -229,6 +239,7 @@ Railway Dashboard → Variables → Add:
 ```
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 ADMIN_TELEGRAM_IDS=YOUR_ID,ANNA_ID
+DATA_DIR=/data
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 BRAVE_API_KEY=BSA...
@@ -243,7 +254,7 @@ Railway → Settings → Volumes → Add Volume:
 Mount Path: /data
 ```
 
-Это сохранит `users.json` между деплоями.
+Это сохранит `users.db` между деплоями.
 
 ### 7.4 Деплой
 
@@ -301,6 +312,12 @@ Telegram → ваш бот → `/start`
 📨 Лимит: безлимит
 🤖 Модель: лучшая доступная
 ```
+
+Если вместо Owner видите Trial:
+
+1. Проверьте `ADMIN_TELEGRAM_IDS` в Railway Variables.
+2. Убедитесь, что ID указан числом без пробелов.
+3. Отправьте `/start` повторно — runtime принудительно синхронизирует роль admin в `owner`.
 
 ### 8.3 Тест подписки
 

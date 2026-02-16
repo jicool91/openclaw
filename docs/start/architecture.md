@@ -140,7 +140,7 @@ type UserRecord = {
 };
 ```
 
-Хранилище: `/data/.openclaw/users.json` (атомарная запись через tmp + rename).
+Хранилище: `/data/.openclaw/users.db` (SQLite).
 
 ### 2. Access Control (`src/telegram/access-control.ts`)
 
@@ -168,13 +168,13 @@ Discriminated union с exhaustive checking:
 
 Команды зарегистрированные через стандартный механизм OpenClaw `customCommands`:
 
-- `/start` — приветствие, создание trial
+- `/start` — приветствие, создание `owner` для `ADMIN_TELEGRAM_IDS` и `trial` для остальных
 - `/plan` — текущий план и статистика
 - `/subscribe` — оформление подписки через Telegram Stars
 
-### 5. Payment Handlers (планируется)
+### 5. Payment Handlers (реализовано)
 
-Обработка Telegram Stars через grammY (уже встроен в ядро):
+Обработка Telegram Stars через grammY (ядро OpenClaw):
 
 - `pre_checkout_query` — валидация перед оплатой
 - `successful_payment` — активация подписки в User Store
@@ -204,20 +204,21 @@ Discriminated union с exhaustive checking:
 
 ## Технологический стек
 
-| Слой               | Технология                               | Источник |
-| ------------------ | ---------------------------------------- | -------- |
-| Платформа          | OpenClaw Platform                        | Ядро     |
-| Gateway            | WebSocket API                            | Ядро     |
-| Telegram           | grammY framework                         | Ядро     |
-| Agent Runtime      | Pi embedded runner                       | Ядро     |
-| Session Management | Per-user isolation, compaction           | Ядро     |
-| Model Routing      | Anthropic, OpenAI, Google, Ollama        | Ядро     |
-| Config             | openclaw.json                            | Ядро     |
-| **User Store**     | **JSON file (users.json)**               | Обёртка  |
-| **Access Control** | **Middleware перед agent dispatch**      | Обёртка  |
-| **Roles & Limits** | **Discriminated unions + daily counter** | Обёртка  |
-| **Payment**        | **Telegram Stars (через grammY)**        | Обёртка  |
-| Hosting            | Railway                                  | Деплой   |
+| Слой               | Технология                                | Источник |
+| ------------------ | ----------------------------------------- | -------- |
+| Платформа          | OpenClaw Platform                         | Ядро     |
+| Gateway            | WebSocket API                             | Ядро     |
+| Telegram           | grammY framework                          | Ядро     |
+| Agent Runtime      | Pi embedded runner                        | Ядро     |
+| Session Management | Per-user isolation, compaction            | Ядро     |
+| Model Routing      | Anthropic, OpenAI, Google, Ollama         | Ядро     |
+| Config             | openclaw.json                             | Ядро     |
+| **User Store**     | **SQLite (`node:sqlite`)**                | Обёртка  |
+| **Access Control** | **Telegram message processor middleware** | Обёртка  |
+| **Roles & Limits** | **Discriminated unions + daily counter**  | Обёртка  |
+| **Payment**        | **Telegram Stars (через grammY)**         | Обёртка  |
+| **Интеграция**     | **OpenClaw Plugin SDK + Hooks**           | Обёртка  |
+| Hosting            | Railway                                   | Деплой   |
 
 ## Правила развития
 

@@ -56,6 +56,7 @@ import {
   resolveTelegramForumThreadId,
   resolveTelegramThreadSpec,
 } from "./bot/helpers.js";
+import { isAdmin, parseAdminTelegramIds } from "./owner-config.js";
 import { buildInlineKeyboard } from "./send.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
@@ -363,6 +364,8 @@ export const registerTelegramNativeCommands = ({
   opts,
   userStore,
 }: RegisterTelegramNativeCommandsParams) => {
+  const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
+
   const boundRoute =
     nativeEnabled && nativeSkillsEnabled
       ? resolveAgentRoute({ cfg, channel: "telegram", accountId })
@@ -817,8 +820,15 @@ export const registerTelegramNativeCommands = ({
 
   // Register subscription management commands
   const ensureSubscriptionUser = async (ctx: Context, userId: number) => {
+    const adminUser = isAdmin(userId, adminIds);
     const existing = await userStore.getUser(userId);
     if (existing) {
+      if (adminUser && existing.role !== "owner") {
+        return await userStore.updateUser(userId, {
+          role: "owner",
+          trialExpiresAt: null,
+        });
+      }
       return existing;
     }
     return await userStore.createUser({
@@ -826,7 +836,7 @@ export const registerTelegramNativeCommands = ({
       firstName: ctx.from?.first_name,
       lastName: ctx.from?.last_name,
       username: ctx.from?.username,
-      role: "trial",
+      role: adminUser ? "owner" : "trial",
     });
   };
 

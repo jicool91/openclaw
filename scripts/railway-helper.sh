@@ -113,7 +113,6 @@ cmd_restart() {
   echo -e "${YELLOW}🔄 Restarting service...${NC}"
   railway redeploy \
     -s openclaw-gateway \
-    -e production \
     --yes
   echo -e "${GREEN}✅ Restart initiated${NC}"
 }

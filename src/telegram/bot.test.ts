@@ -238,8 +238,12 @@ describe("createTelegramBot", () => {
       command: command.name,
       description: command.description,
     }));
-    expect(registered.slice(0, native.length)).toEqual(native);
-    expect(registered.slice(native.length)).toEqual([
+    // Subscription commands are added first, then native, then custom
+    const subscriptionCommandCount = 3; // /start, /plan, /subscribe
+    expect(
+      registered.slice(subscriptionCommandCount, subscriptionCommandCount + native.length),
+    ).toEqual(native);
+    expect(registered.slice(subscriptionCommandCount + native.length)).toEqual([
       { command: "custom_backup", description: "Git backup" },
       { command: "custom_generate", description: "Create an image" },
     ]);
@@ -307,7 +311,9 @@ describe("createTelegramBot", () => {
       command: string;
       description: string;
     }>;
-    expect(registered).toEqual([
+    // Subscription commands are added first, then custom commands
+    const subscriptionCommandCount = 3; // /start, /plan, /subscribe
+    expect(registered.slice(subscriptionCommandCount)).toEqual([
       { command: "custom_backup", description: "Git backup" },
       { command: "custom_generate", description: "Create an image" },
     ]);
@@ -799,7 +805,16 @@ describe("createTelegramBot", () => {
 
     createTelegramBot({ token: "tok" });
 
-    expect(setMyCommandsSpy).toHaveBeenCalledWith([]);
+    // Subscription commands are still registered even when native commands are disabled
+    const registered = setMyCommandsSpy.mock.calls[0]?.[0] as Array<{
+      command: string;
+      description: string;
+    }>;
+    expect(registered).toEqual([
+      { command: "start", description: "Начать работу с ботом" },
+      { command: "plan", description: "Показать текущий план и статистику" },
+      { command: "subscribe", description: "Оформить подписку" },
+    ]);
   });
 
   it("skips group messages when requireMention is enabled and no mention matches", async () => {

@@ -51,7 +51,12 @@ check_railway_cli() {
 
 cmd_status() {
   echo -e "${BLUE}📊 Railway Status${NC}"
-  railway status --json || railway status
+  railway status \
+    --project "$PROJECT_ID" \
+    --environment "$ENV_ID" \
+    --json || railway status \
+    --project "$PROJECT_ID" \
+    --environment "$ENV_ID"
 }
 
 cmd_logs() {
@@ -59,7 +64,8 @@ cmd_logs() {
   railway logs \
     --project "$PROJECT_ID" \
     --environment "$ENV_ID" \
-    --service "$SERVICE_ID"
+    --service "$SERVICE_ID" \
+    --deployment
 }
 
 cmd_logs_follow() {
@@ -69,6 +75,7 @@ cmd_logs_follow() {
     --project "$PROJECT_ID" \
     --environment "$ENV_ID" \
     --service "$SERVICE_ID" \
+    --deployment \
     --follow
 }
 
@@ -83,7 +90,9 @@ cmd_ssh() {
 cmd_env() {
   echo -e "${BLUE}🔧 Environment Variables${NC}"
   railway variables \
-    --service openclaw-gateway \
+    --project "$PROJECT_ID" \
+    --environment "$ENV_ID" \
+    --service "$SERVICE_ID" \
     --json | jq 'to_entries | map({key: .key, value: .value}) | sort_by(.key)'
 }
 
@@ -111,17 +120,11 @@ cmd_deploy() {
 
 cmd_restart() {
   echo -e "${YELLOW}🔄 Restarting service...${NC}"
-  railway service \
+  railway redeploy \
     --project "$PROJECT_ID" \
     --environment "$ENV_ID" \
-    restart "$SERVICE_ID" || {
-    echo -e "${RED}Failed to restart via railway service command${NC}"
-    echo "Trying alternative method..."
-    railway redeploy \
-      --project "$PROJECT_ID" \
-      --environment "$ENV_ID" \
-      --service "$SERVICE_ID"
-  }
+    --service "$SERVICE_ID" \
+    --yes
   echo -e "${GREEN}✅ Restart initiated${NC}"
 }
 
@@ -129,7 +132,11 @@ cmd_health() {
   echo -e "${BLUE}🏥 Checking Gateway Health${NC}"
 
   # Get gateway URL from env
-  GW_JSON=$(railway variables --service openclaw-gateway --json)
+  GW_JSON=$(railway variables \
+    --project "$PROJECT_ID" \
+    --environment "$ENV_ID" \
+    --service "$SERVICE_ID" \
+    --json)
   GW_DOMAIN=$(echo "$GW_JSON" | jq -r '.RAILWAY_PUBLIC_DOMAIN // empty')
 
   if [ -z "$GW_DOMAIN" ]; then

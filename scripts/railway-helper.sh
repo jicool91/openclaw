@@ -32,6 +32,7 @@ usage() {
   echo "  deploy       - задеплоить текущую версию (git push)"
   echo "  restart      - перезапустить сервис"
   echo "  health       - проверить health gateway"
+  echo "  set-admin <id[,id2]> - установить ADMIN_TELEGRAM_IDS"
   echo "  help         - показать эту справку"
   echo ""
   echo "Environment Variables:"
@@ -57,8 +58,8 @@ cmd_status() {
 cmd_logs() {
   echo -e "${BLUE}📜 Railway Logs (last 100 lines)${NC}"
   railway logs \
-    -s openclaw-gateway \
-    -e production \
+    -s "$SERVICE_ID" \
+    -e "$ENV_ID" \
     --deployment
 }
 
@@ -67,23 +68,24 @@ cmd_logs_follow() {
   echo "Press Ctrl+C to stop"
   # Note: Railway CLI doesn't support --follow, use web dashboard instead
   railway logs \
-    -s openclaw-gateway \
-    -e production \
+    -s "$SERVICE_ID" \
+    -e "$ENV_ID" \
     --deployment
 }
 
 cmd_ssh() {
   echo -e "${BLUE}🔐 Opening SSH session${NC}"
-  railway shell \
-    -s openclaw-gateway \
-    -e production
+  railway ssh \
+    -p "$PROJECT_ID" \
+    -e "$ENV_ID" \
+    -s "$SERVICE_ID"
 }
 
 cmd_env() {
   echo -e "${BLUE}🔧 Environment Variables${NC}"
   railway variables \
-    -s openclaw-gateway \
-    -e production \
+    -s "$SERVICE_ID" \
+    -e "$ENV_ID" \
     --json | jq 'to_entries | map({key: .key, value: .value}) | sort_by(.key)'
 }
 
@@ -112,7 +114,7 @@ cmd_deploy() {
 cmd_restart() {
   echo -e "${YELLOW}🔄 Restarting service...${NC}"
   railway redeploy \
-    -s openclaw-gateway \
+    -s "$SERVICE_ID" \
     --yes
   echo -e "${GREEN}✅ Restart initiated${NC}"
 }
@@ -122,8 +124,8 @@ cmd_health() {
 
   # Get gateway URL from env
   GW_JSON=$(railway variables \
-    -s openclaw-gateway \
-    -e production \
+    -s "$SERVICE_ID" \
+    -e "$ENV_ID" \
     --json)
   GW_DOMAIN=$(echo "$GW_JSON" | jq -r '.RAILWAY_PUBLIC_DOMAIN // empty')
 
@@ -141,8 +143,27 @@ cmd_health() {
   }
 }
 
+cmd_set_admin() {
+  local ids="${1:-}"
+  if [ -z "$ids" ]; then
+    echo -e "${RED}❌ Missing admin ID(s)${NC}"
+    echo "Usage: $0 set-admin <id[,id2,...]>"
+    exit 1
+  fi
+
+  echo -e "${YELLOW}🔐 Setting ADMIN_TELEGRAM_IDS=${ids}${NC}"
+  railway variables \
+    -s "$SERVICE_ID" \
+    -e "$ENV_ID" \
+    --set "ADMIN_TELEGRAM_IDS=${ids}"
+  echo -e "${GREEN}✅ ADMIN_TELEGRAM_IDS updated${NC}"
+}
+
 # Main
-case "${1:-help}" in
+COMMAND="${1:-help}"
+ARG1="${2:-}"
+
+case "$COMMAND" in
   status)
     check_railway_cli
     cmd_status
@@ -173,6 +194,10 @@ case "${1:-help}" in
   health)
     check_railway_cli
     cmd_health
+    ;;
+  set-admin)
+    check_railway_cli
+    cmd_set_admin "$ARG1"
     ;;
   help|--help|-h)
     usage

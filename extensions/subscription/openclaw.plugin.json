@@ -1,0 +1,10 @@
+{
+  "id": "subscription",
+  "name": "Subscription",
+  "description": "Subscription bootstrap: initializes owner records and prepares persistence state.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

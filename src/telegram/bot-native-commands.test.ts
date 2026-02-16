@@ -110,9 +110,14 @@ describe("registerTelegramNativeCommands", () => {
       description: string;
     }>;
     expect(registeredCommands).toHaveLength(100);
-    expect(registeredCommands).toEqual(customCommands.slice(0, 100));
+    expect(registeredCommands).toEqual([
+      { command: "start", description: "Начать работу с ботом" },
+      { command: "plan", description: "Показать текущий план и статистику" },
+      { command: "subscribe", description: "Оформить подписку" },
+      ...customCommands.slice(0, 97),
+    ]);
     expect(runtimeLog).toHaveBeenCalledWith(
-      "telegram: truncating 120 commands to 100 (Telegram Bot API limit)",
+      "telegram: truncating 123 commands to 100 (Telegram Bot API limit)",
     );
   });
 });

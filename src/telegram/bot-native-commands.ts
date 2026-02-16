@@ -74,6 +74,75 @@ type TelegramCommandAuthResult = {
   commandAuthorized: boolean;
 };
 
+type SubscriptionPlan = "starter" | "premium";
+
+type SubscriptionInvoicePayload = {
+  v: 1;
+  kind: "subscription";
+  userId: number;
+  plan: SubscriptionPlan;
+  accountId: string;
+};
+
+const SUBSCRIPTION_PERIOD_DAYS = 30;
+const SUBSCRIPTION_PERIOD_MS = SUBSCRIPTION_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+const SUBSCRIPTION_PRICING: Record<
+  SubscriptionPlan,
+  {
+    title: string;
+    description: string;
+    label: string;
+    stars: number;
+  }
+> = {
+  starter: {
+    title: "OpenClaw Starter",
+    description: "30 сообщений в день и базовые модели на 30 дней.",
+    label: "Starter",
+    stars: 100,
+  },
+  premium: {
+    title: "OpenClaw Premium",
+    description: "Безлимит и продвинутые модели на 30 дней.",
+    label: "Premium",
+    stars: 300,
+  },
+};
+
+function buildSubscriptionInvoicePayload(params: {
+  accountId: string;
+  userId: number;
+  plan: SubscriptionPlan;
+}): string {
+  const payload: SubscriptionInvoicePayload = {
+    v: 1,
+    kind: "subscription",
+    accountId: params.accountId,
+    userId: params.userId,
+    plan: params.plan,
+  };
+  return JSON.stringify(payload);
+}
+
+function parseSubscriptionInvoicePayload(raw: string): SubscriptionInvoicePayload | null {
+  try {
+    const parsed = JSON.parse(raw) as Partial<SubscriptionInvoicePayload>;
+    if (
+      parsed?.v !== 1 ||
+      parsed.kind !== "subscription" ||
+      typeof parsed.userId !== "number" ||
+      (parsed.plan !== "starter" && parsed.plan !== "premium") ||
+      typeof parsed.accountId !== "string" ||
+      parsed.accountId.trim() === ""
+    ) {
+      return null;
+    }
+    return parsed as SubscriptionInvoicePayload;
+  } catch {
+    return null;
+  }
+}
+
 export type RegisterTelegramHandlerParams = {
   cfg: OpenClawConfig;
   accountId: string;
@@ -747,6 +816,19 @@ export const registerTelegramNativeCommands = ({
   }
 
   // Register subscription management commands
+  const ensureSubscriptionUser = async (ctx: Context, userId: number) => {
+    const existing = await userStore.getUser(userId);
+    if (existing) {
+      return existing;
+    }
+    return await userStore.createUser({
+      telegramUserId: userId,
+      firstName: ctx.from?.first_name,
+      lastName: ctx.from?.last_name,
+      username: ctx.from?.username,
+      role: "trial",
+    });
+  };
 
   // /start command
   bot.command("start", async (ctx) => {
@@ -756,17 +838,7 @@ export const registerTelegramNativeCommands = ({
     }
 
     try {
-      let user = await userStore.getUser(userId);
-      if (!user) {
-        // Create new trial user
-        user = await userStore.createUser({
-          telegramUserId: userId,
-          firstName: ctx.from?.first_name,
-          lastName: ctx.from?.last_name,
-          username: ctx.from?.username,
-          role: "trial",
-        });
-      }
+      const user = await ensureSubscriptionUser(ctx, userId);
 
       const remaining = getRemainingMessages(user);
       const remainingText =
@@ -802,11 +874,7 @@ export const registerTelegramNativeCommands = ({
     }
 
     try {
-      const user = await userStore.getUser(userId);
-      if (!user) {
-        await ctx.reply("Пользователь не найден. Используйте /start для регистрации.");
-        return;
-      }
+      const user = await ensureSubscriptionUser(ctx, userId);
 
       const remaining = getRemainingMessages(user);
       const remainingText =
@@ -849,23 +917,191 @@ export const registerTelegramNativeCommands = ({
     }
 
     try {
+      const user = await ensureSubscriptionUser(ctx, userId);
+      if (user.role === "owner") {
+        await ctx.reply("У вас уже план Owner. Подписка не требуется.");
+        return;
+      }
+
+      const starter = SUBSCRIPTION_PRICING.starter;
+      const premium = SUBSCRIPTION_PRICING.premium;
       const message =
         "💳 Подписка на OpenClaw\n\n" +
-        "Доступные планы:\n" +
-        "🌟 Базовый - 299₽/мес\n" +
-        "  • Безлимитные сообщения\n" +
+        `Выберите тариф (${SUBSCRIPTION_PERIOD_DAYS} дней):\n` +
+        `🌟 Starter — ${starter.stars} XTR\n` +
+        "  • 30 сообщений в день\n" +
         "  • Базовые модели\n\n" +
-        "💎 Премиум - 599₽/мес\n" +
+        `💎 Premium — ${premium.stars} XTR\n` +
         "  • Безлимитные сообщения\n" +
-        "  • Продвинутые модели\n" +
-        "  • Приоритетная поддержка\n\n" +
-        "⚙️ Оплата пока не подключена.\n" +
-        "Свяжитесь с администратором для активации.";
+        "  • Продвинутые модели\n\n" +
+        "Нажмите кнопку тарифа ниже, чтобы получить инвойс в Telegram Stars.";
 
-      await ctx.reply(message);
+      await ctx.reply(message, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: `Starter — ${starter.stars} XTR`, callback_data: "subscribe_starter" }],
+            [{ text: `Premium — ${premium.stars} XTR`, callback_data: "subscribe_premium" }],
+          ],
+        },
+      });
     } catch (err) {
       runtime.error?.(`telegram /subscribe command failed: ${String(err)}`);
       await ctx.reply("Произошла ошибка. Попробуйте позже.");
     }
   });
+
+  if (typeof (bot as unknown as { callbackQuery?: unknown }).callbackQuery === "function") {
+    bot.callbackQuery(/^subscribe_(starter|premium)$/, async (ctx) => {
+      if (shouldSkipUpdate(ctx)) {
+        return;
+      }
+
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.answerCallbackQuery({
+          text: "Не удалось определить пользователя.",
+          show_alert: true,
+        });
+        return;
+      }
+
+      const data = ctx.callbackQuery?.data ?? "";
+      const suffix = data.replace("subscribe_", "");
+      const plan: SubscriptionPlan | null =
+        suffix === "starter" || suffix === "premium" ? suffix : null;
+      if (!plan) {
+        await ctx.answerCallbackQuery({ text: "Неверный тариф.", show_alert: true });
+        return;
+      }
+
+      try {
+        await ensureSubscriptionUser(ctx, userId);
+        const pricing = SUBSCRIPTION_PRICING[plan];
+        const payload = buildSubscriptionInvoicePayload({
+          accountId,
+          userId,
+          plan,
+        });
+
+        await ctx.answerCallbackQuery();
+        await withTelegramApiErrorLogging({
+          operation: "sendInvoice",
+          runtime,
+          fn: () =>
+            bot.api.sendInvoice(userId, pricing.title, pricing.description, payload, "XTR", [
+              { label: pricing.label, amount: pricing.stars },
+            ]),
+        });
+      } catch (err) {
+        runtime.error?.(`telegram subscribe callback failed: ${String(err)}`);
+        await ctx.answerCallbackQuery({
+          text: "Не удалось создать инвойс. Попробуйте позже.",
+          show_alert: true,
+        });
+      }
+    });
+  }
+
+  if (typeof (bot as unknown as { on?: unknown }).on === "function") {
+    bot.on("pre_checkout_query", async (ctx) => {
+      if (shouldSkipUpdate(ctx)) {
+        return;
+      }
+
+      const query = ctx.preCheckoutQuery;
+      const payload = parseSubscriptionInvoicePayload(query.invoice_payload);
+      if (!payload) {
+        await ctx.answerPreCheckoutQuery(false, {
+          error_message: "Некорректные данные платежа.",
+        });
+        return;
+      }
+
+      if (query.currency !== "XTR") {
+        await ctx.answerPreCheckoutQuery(false, {
+          error_message: "Поддерживается только оплата в Telegram Stars (XTR).",
+        });
+        return;
+      }
+
+      if (payload.accountId !== accountId) {
+        await ctx.answerPreCheckoutQuery(false, {
+          error_message: "Инвойс создан для другого аккаунта бота.",
+        });
+        return;
+      }
+
+      if (payload.userId !== query.from.id) {
+        await ctx.answerPreCheckoutQuery(false, {
+          error_message: "Платеж может оплатить только получатель инвойса.",
+        });
+        return;
+      }
+
+      const pricing = SUBSCRIPTION_PRICING[payload.plan];
+      if (query.total_amount !== pricing.stars) {
+        await ctx.answerPreCheckoutQuery(false, {
+          error_message: "Сумма платежа не совпадает с выбранным тарифом.",
+        });
+        return;
+      }
+
+      await ctx.answerPreCheckoutQuery(true);
+    });
+
+    bot.on("message:successful_payment", async (ctx) => {
+      if (shouldSkipUpdate(ctx)) {
+        return;
+      }
+
+      const userId = ctx.from?.id;
+      if (!userId) {
+        return;
+      }
+
+      const payment = ctx.message.successful_payment;
+      const payload = parseSubscriptionInvoicePayload(payment.invoice_payload);
+      if (!payload) {
+        runtime.error?.("telegram successful_payment: invalid invoice payload");
+        await ctx.reply("✅ Платеж получен. Обратитесь к администратору для проверки активации.");
+        return;
+      }
+
+      const pricing = SUBSCRIPTION_PRICING[payload.plan];
+      if (payment.currency !== "XTR" || payment.total_amount !== pricing.stars) {
+        runtime.error?.(
+          `telegram successful_payment mismatch: currency=${payment.currency} amount=${payment.total_amount} plan=${payload.plan}`,
+        );
+        await ctx.reply("✅ Платеж получен. Обратитесь к администратору для проверки активации.");
+        return;
+      }
+
+      try {
+        const user = await ensureSubscriptionUser(ctx, payload.userId);
+        const now = Date.now();
+        const currentExpiry =
+          typeof user.subscriptionExpiresAt === "number" ? user.subscriptionExpiresAt : null;
+        const baseTs = currentExpiry && currentExpiry > now ? currentExpiry : now;
+        const nextExpiry = baseTs + SUBSCRIPTION_PERIOD_MS;
+
+        await userStore.updateUser(payload.userId, {
+          role: "subscriber",
+          subscriptionPlan: payload.plan,
+          subscriptionExpiresAt: nextExpiry,
+          subscriptionChargeId: payment.telegram_payment_charge_id,
+          autoRenew: true,
+        });
+
+        await ctx.reply(
+          `✅ Подписка активирована!\n\n` +
+            `🎯 Тариф: ${payload.plan === "premium" ? "Premium" : "Starter"}\n` +
+            `⏱ До: ${new Date(nextExpiry).toLocaleDateString("ru-RU")}\n` +
+            `🔄 Автопродление: включено`,
+        );
+      } catch (err) {
+        runtime.error?.(`telegram successful_payment failed: ${String(err)}`);
+        await ctx.reply("✅ Платеж получен. Подписка будет активирована в ближайшее время.");
+      }
+    });
+  }
 };

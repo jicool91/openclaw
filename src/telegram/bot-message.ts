@@ -83,7 +83,9 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
 
     // Check access control (subscription/trial/limits)
     const userId = primaryCtx.message.from?.id;
-    if (userId) {
+    const chatType = primaryCtx.message.chat?.type;
+    const enforceAccessControl = chatType === "private";
+    if (userId && enforceAccessControl) {
       try {
         // Get or create user
         let user = await userStore.getUser(userId);

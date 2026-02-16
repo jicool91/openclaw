@@ -45,7 +45,6 @@ import {
   resolveTelegramStreamMode,
 } from "./bot/helpers.js";
 import { resolveTelegramFetch } from "./fetch.js";
-import { initializeOwners, parseAdminTelegramIds } from "./owner-config.js";
 import { wasSentByBot } from "./sent-message-cache.js";
 import { UserStore } from "./user-store.js";
 
@@ -157,19 +156,11 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   const dataDir = process.env.DATA_DIR ?? process.env.HOME ?? "/tmp";
   const userStore = new UserStore(dataDir);
 
-  // Load user store and initialize owners asynchronously (non-blocking)
-  const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
+  // Load user store asynchronously (non-blocking)
   Promise.resolve()
     .then(async () => {
       await userStore.load();
-      runtime.log?.(`telegram: user store loaded from ${dataDir}/.openclaw/users.json`);
-
-      if (adminIds.length > 0) {
-        await initializeOwners(userStore, adminIds);
-        runtime.log?.(
-          `telegram: initialized ${adminIds.length} owner${adminIds.length > 1 ? "s" : ""}`,
-        );
-      }
+      runtime.log?.(`telegram: user store loaded from ${dataDir}/.openclaw/users.db`);
     })
     .catch((err) => {
       runtime.error?.(danger(`telegram: failed to initialize user store: ${String(err)}`));

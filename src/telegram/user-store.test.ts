@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { UserStore } from "./user-store.js";
@@ -366,7 +366,7 @@ describe("UserStore", () => {
         firstName: "John",
       });
 
-      expect(existsSync(join(newDataDir, ".openclaw", "users.json"))).toBe(true);
+      expect(existsSync(join(newDataDir, ".openclaw", "users.db"))).toBe(true);
 
       // Clean up
       await rm(join(testDataDir, "nested"), { recursive: true, force: true });
@@ -403,15 +403,66 @@ describe("UserStore", () => {
       }
     });
 
-    it("uses atomic write to prevent corruption", async () => {
-      await store.createUser({
-        telegramUserId: 123456,
-        firstName: "John",
-      });
+    it("migrates legacy users.json into SQLite on first load", async () => {
+      const legacyDir = join(testDataDir, ".openclaw");
+      await mkdir(legacyDir, { recursive: true });
+      await writeFile(
+        join(legacyDir, "users.json"),
+        JSON.stringify([
+          {
+            telegramUserId: 654321,
+            firstName: "Legacy",
+            role: "trial",
+            createdAt: Date.now(),
+            messagesUsedToday: 0,
+            lastMessageDate: new Date().toISOString().split("T")[0],
+            totalMessagesUsed: 0,
+            totalTokensUsed: 0,
+            totalCostUsd: 0,
+          },
+        ]),
+      );
 
-      // Verify no temporary file remains after successful write
-      const tmpPath = join(testDataDir, ".openclaw", "users.json.tmp");
-      expect(existsSync(tmpPath)).toBe(false);
+      const newStore = new UserStore(testDataDir);
+      const user = await newStore.getUser(654321);
+      expect(user?.firstName).toBe("Legacy");
+      expect(user?.role).toBe("trial");
+    });
+
+    it("ignores malformed legacy users.json without crashing", async () => {
+      const legacyDir = join(testDataDir, ".openclaw");
+      await mkdir(legacyDir, { recursive: true });
+      await writeFile(join(legacyDir, "users.json"), "{ invalid json");
+
+      const newStore = new UserStore(testDataDir);
+      await expect(newStore.getUserCount()).resolves.toBe(0);
+    });
+
+    it("migrates legacy users.json object-map format", async () => {
+      const legacyDir = join(testDataDir, ".openclaw");
+      await mkdir(legacyDir, { recursive: true });
+      await writeFile(
+        join(legacyDir, "users.json"),
+        JSON.stringify({
+          a: {
+            telegramUserId: 777,
+            firstName: "Mapped",
+            role: "vip",
+            createdAt: Date.now(),
+            messagesUsedToday: 1,
+            lastMessageDate: new Date().toISOString().slice(0, 10),
+            totalMessagesUsed: 10,
+            totalTokensUsed: 500,
+            totalCostUsd: 0.25,
+          },
+        }),
+      );
+
+      const newStore = new UserStore(testDataDir);
+      const user = await newStore.getUser(777);
+      expect(user?.firstName).toBe("Mapped");
+      expect(user?.role).toBe("vip");
+      expect(user?.totalMessagesUsed).toBe(10);
     });
   });
 

@@ -10,6 +10,7 @@ import type {
 } from "../config/types.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { TelegramContext } from "./bot/types.js";
+import type { UserStore } from "./user-store.js";
 import { resolveChunkMode } from "../auto-reply/chunk.js";
 import {
   buildCommandTextFromArgs,
@@ -40,6 +41,7 @@ import {
 } from "../plugins/commands.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
 import { resolveThreadSessionKeys } from "../routing/session-key.js";
+import { getRemainingMessages } from "./access-control.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { firstDefined, isSenderAllowed, normalizeAllowFromWithStore } from "./bot-access.js";
 import { TelegramUpdateKeyContext } from "./bot-updates.js";
@@ -54,6 +56,7 @@ import {
   resolveTelegramForumThreadId,
   resolveTelegramThreadSpec,
 } from "./bot/helpers.js";
+import { parseAdminTelegramIds } from "./owner-config.js";
 import { buildInlineKeyboard } from "./send.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
@@ -120,6 +123,7 @@ type RegisterTelegramNativeCommandsParams = {
   ) => { groupConfig?: TelegramGroupConfig; topicConfig?: TelegramTopicConfig };
   shouldSkipUpdate: (ctx: TelegramUpdateKeyContext) => boolean;
   opts: { token: string };
+  userStore: UserStore;
 };
 
 async function resolveTelegramCommandAuth(params: {
@@ -289,6 +293,7 @@ export const registerTelegramNativeCommands = ({
   resolveTelegramGroupConfig,
   shouldSkipUpdate,
   opts,
+  userStore,
 }: RegisterTelegramNativeCommandsParams) => {
   const boundRoute =
     nativeEnabled && nativeSkillsEnabled
@@ -358,7 +363,15 @@ export const registerTelegramNativeCommands = ({
     existingCommands.add(normalized);
     pluginCommands.push({ command: normalized, description });
   }
+  // Subscription management commands
+  const subscriptionCommands = [
+    { command: "start", description: "Начать работу с ботом" },
+    { command: "plan", description: "Показать текущий план и статистику" },
+    { command: "subscribe", description: "Оформить подписку" },
+  ];
+
   const allCommandsFull: Array<{ command: string; description: string }> = [
+    ...subscriptionCommands,
     ...nativeCommands.map((command) => ({
       command: command.name,
       description: command.description,
@@ -733,4 +746,128 @@ export const registerTelegramNativeCommands = ({
       fn: () => bot.api.setMyCommands([]),
     }).catch(() => {});
   }
+
+  // Register subscription management commands
+  const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
+
+  // /start command
+  bot.command("start", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) {
+      return;
+    }
+
+    try {
+      let user = await userStore.getUser(userId);
+      if (!user) {
+        // Create new trial user
+        user = await userStore.createUser({
+          telegramUserId: userId,
+          firstName: ctx.from?.first_name,
+          lastName: ctx.from?.last_name,
+          username: ctx.from?.username,
+          role: "trial",
+        });
+      }
+
+      const remaining = getRemainingMessages(user);
+      const remainingText =
+        remaining === "unlimited" ? "безлимит" : `${remaining} сообщений в день`;
+
+      let message = "✅ Добро пожаловать в OpenClaw!\n\n";
+
+      if (user.role === "trial") {
+        const expiresDate = user.trialExpiresAt
+          ? new Date(user.trialExpiresAt).toLocaleDateString("ru-RU")
+          : "н/д";
+        message += `Вам доступен бесплатный trial на 7 дней:\n📨 ${remainingText}\n⏱ До ${expiresDate}\n\nПопробуйте: напишите мне любой вопрос!`;
+      } else if (user.role === "owner") {
+        message += `📊 Ваш план: Owner\n\n⏱ Срок действия: бессрочно\n📨 Лимит: безлимит\n🤖 Модель: лучшая доступная`;
+      } else if (user.role === "vip" || user.role === "subscriber") {
+        message += `📊 Ваш план: ${user.role === "vip" ? "VIP" : "Подписка"}\n\n⏱ Срок действия: активна\n📨 Лимит: ${remainingText}\n🤖 Модель: продвинутая`;
+      } else {
+        message += `📊 Ваш план: ${user.role}\n\n📨 Доступно: ${remainingText}`;
+      }
+
+      await ctx.reply(message);
+    } catch (err) {
+      runtime.error?.(`telegram /start command failed: ${String(err)}`);
+      await ctx.reply("Произошла ошибка. Попробуйте позже.");
+    }
+  });
+
+  // /plan command
+  bot.command("plan", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) {
+      return;
+    }
+
+    try {
+      const user = await userStore.getUser(userId);
+      if (!user) {
+        await ctx.reply("Пользователь не найден. Используйте /start для регистрации.");
+        return;
+      }
+
+      const remaining = getRemainingMessages(user);
+      const remainingText =
+        remaining === "unlimited" ? "безлимит" : `${remaining} сообщений сегодня`;
+
+      let message = `📊 Ваш текущий план\n\n`;
+
+      if (user.role === "owner") {
+        message += `🎯 План: Owner\n⏱ Срок действия: бессрочно\n📨 Лимит: безлимит\n🤖 Модель: лучшая доступная`;
+      } else if (user.role === "vip") {
+        message += `🎯 План: VIP\n📨 Осталось: ${remainingText}\n🤖 Модель: продвинутая`;
+      } else if (user.role === "subscriber") {
+        const expiresDate = user.subscriptionExpiresAt
+          ? new Date(user.subscriptionExpiresAt).toLocaleDateString("ru-RU")
+          : "активна";
+        message += `🎯 План: Подписка\n⏱ До: ${expiresDate}\n📨 Осталось: ${remainingText}\n🤖 Модель: продвинутая`;
+      } else if (user.role === "trial") {
+        const expiresDate = user.trialExpiresAt
+          ? new Date(user.trialExpiresAt).toLocaleDateString("ru-RU")
+          : "н/д";
+        message += `🎯 План: Trial (пробный)\n⏱ До: ${expiresDate}\n📨 Осталось: ${remainingText}`;
+      } else {
+        message += `🎯 План: ${user.role}\n📨 Осталось: ${remainingText}`;
+      }
+
+      message += `\n\n📈 Статистика:\n📨 Всего сообщений: ${user.totalMessagesUsed}`;
+
+      await ctx.reply(message);
+    } catch (err) {
+      runtime.error?.(`telegram /plan command failed: ${String(err)}`);
+      await ctx.reply("Произошла ошибка. Попробуйте позже.");
+    }
+  });
+
+  // /subscribe command
+  bot.command("subscribe", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) {
+      return;
+    }
+
+    try {
+      const message =
+        "💳 Подписка на OpenClaw\n\n" +
+        "Доступные планы:\n" +
+        "🌟 Базовый - 299₽/мес\n" +
+        "  • Безлимитные сообщения\n" +
+        "  • Базовые модели\n\n" +
+        "💎 Премиум - 599₽/мес\n" +
+        "  • Безлимитные сообщения\n" +
+        "  • Продвинутые модели\n" +
+        "  • Приоритетная поддержка\n\n" +
+        "⚙️ Оплата пока не подключена.\n" +
+        "Свяжитесь с администратором для активации.";
+
+      await ctx.reply(message);
+    } catch (err) {
+      runtime.error?.(`telegram /subscribe command failed: ${String(err)}`);
+      await ctx.reply("Произошла ошибка. Попробуйте позже.");
+    }
+  });
 };

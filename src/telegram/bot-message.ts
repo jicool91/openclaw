@@ -3,6 +3,8 @@ import type { TelegramAccountConfig } from "../config/types.telegram.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { TelegramBotOptions } from "./bot.js";
 import type { TelegramContext, TelegramStreamMode } from "./bot/types.js";
+import type { UserStore } from "./user-store.js";
+import { canSendMessage, formatAccessDeniedMessage } from "./access-control.js";
 import {
   buildTelegramMessageContext,
   type BuildTelegramMessageContextParams,
@@ -22,6 +24,7 @@ type TelegramMessageProcessorDeps = Omit<
   textLimit: number;
   opts: Pick<TelegramBotOptions, "token">;
   resolveBotTopicsEnabled: (ctx: TelegramContext) => boolean | Promise<boolean>;
+  userStore: UserStore;
 };
 
 export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDeps) => {
@@ -46,6 +49,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     textLimit,
     opts,
     resolveBotTopicsEnabled,
+    userStore,
   } = deps;
 
   return async (
@@ -76,6 +80,42 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     if (!context) {
       return;
     }
+
+    // Check access control (subscription/trial/limits)
+    const userId = primaryCtx.from?.id;
+    if (userId) {
+      try {
+        // Get or create user
+        let user = await userStore.getUser(userId);
+        if (!user) {
+          // New user - create with trial
+          user = await userStore.createUser({
+            telegramUserId: userId,
+            firstName: primaryCtx.from?.first_name,
+            lastName: primaryCtx.from?.last_name,
+            username: primaryCtx.from?.username,
+            role: "trial",
+          });
+        }
+
+        // Check if user can send message
+        const accessCheck = canSendMessage(user);
+        if (!accessCheck.allowed) {
+          const deniedMessage = formatAccessDeniedMessage(accessCheck);
+          if (deniedMessage) {
+            await bot.api.sendMessage(userId, deniedMessage);
+          }
+          return; // Block message
+        }
+
+        // Increment message counter before processing
+        await userStore.incrementMessageCount(userId);
+      } catch (err) {
+        runtime.error?.(`telegram: access control check failed for user ${userId}: ${String(err)}`);
+        // Continue processing on error to avoid blocking users
+      }
+    }
+
     await dispatchTelegramMessage({
       context,
       bot,

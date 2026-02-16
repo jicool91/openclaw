@@ -46,6 +46,8 @@ import {
 } from "./bot/helpers.js";
 import { resolveTelegramFetch } from "./fetch.js";
 import { wasSentByBot } from "./sent-message-cache.js";
+import { UserStore } from "./user-store.js";
+import { initializeOwners, parseAdminTelegramIds } from "./owner-config.js";
 
 export type TelegramBotOptions = {
   token: string;
@@ -150,6 +152,29 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   bot.catch((err) => {
     runtime.error?.(danger(`telegram bot error: ${formatUncaughtError(err)}`));
   });
+
+  // Initialize UserStore for subscription management
+  const dataDir = process.env.DATA_DIR ?? process.env.HOME ?? "/tmp";
+  const userStore = new UserStore(dataDir);
+  try {
+    await userStore.load();
+    runtime.log?.(`telegram: user store loaded from ${dataDir}/.openclaw/users.json`);
+  } catch (err) {
+    runtime.error?.(danger(`telegram: failed to load user store: ${String(err)}`));
+  }
+
+  // Initialize owners from ADMIN_TELEGRAM_IDS environment variable
+  const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
+  if (adminIds.length > 0) {
+    try {
+      await initializeOwners(userStore, adminIds);
+      runtime.log?.(
+        `telegram: initialized ${adminIds.length} owner${adminIds.length > 1 ? "s" : ""}`,
+      );
+    } catch (err) {
+      runtime.error?.(danger(`telegram: failed to initialize owners: ${String(err)}`));
+    }
+  }
 
   const recentUpdates = createTelegramUpdateDedupe();
   let lastUpdateId =
@@ -360,6 +385,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     textLimit,
     opts,
     resolveBotTopicsEnabled,
+    userStore,
   });
 
   registerTelegramNativeCommands({
@@ -380,6 +406,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     resolveTelegramGroupConfig,
     shouldSkipUpdate,
     opts,
+    userStore,
   });
 
   // Handle emoji reactions to messages

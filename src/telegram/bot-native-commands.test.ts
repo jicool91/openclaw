@@ -139,6 +139,40 @@ describe("registerTelegramNativeCommands", () => {
     );
   });
 
+  it("clears scoped command menus before setting default commands", async () => {
+    const setMyCommands = vi.fn().mockResolvedValue(undefined);
+    const deleteMyCommands = vi.fn().mockResolvedValue(undefined);
+
+    registerTelegramNativeCommands({
+      ...buildParams({}, "default"),
+      nativeEnabled: false,
+      nativeSkillsEnabled: false,
+      bot: {
+        api: {
+          setMyCommands,
+          deleteMyCommands,
+          sendMessage: vi.fn().mockResolvedValue(undefined),
+        },
+        command: vi.fn(),
+      } as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
+    });
+
+    await vi.waitFor(() => {
+      expect(deleteMyCommands).toHaveBeenCalledTimes(4);
+    });
+    expect(deleteMyCommands).toHaveBeenNthCalledWith(1);
+    expect(deleteMyCommands).toHaveBeenNthCalledWith(2, { scope: { type: "all_private_chats" } });
+    expect(deleteMyCommands).toHaveBeenNthCalledWith(3, { scope: { type: "all_group_chats" } });
+    expect(deleteMyCommands).toHaveBeenNthCalledWith(4, {
+      scope: { type: "all_chat_administrators" },
+    });
+    expect(setMyCommands).toHaveBeenCalledWith([
+      { command: "start", description: "Начать работу с ботом" },
+      { command: "plan", description: "Показать текущий план и статистику" },
+      { command: "subscribe", description: "Оформить подписку" },
+    ]);
+  });
+
   it("creates owner role for ADMIN_TELEGRAM_IDS user on /start", async () => {
     const previousAdminIds = process.env.ADMIN_TELEGRAM_IDS;
     process.env.ADMIN_TELEGRAM_IDS = "8521810561";

@@ -473,12 +473,24 @@ export const registerTelegramNativeCommands = ({
     }
   };
   if (typeof bot.api.deleteMyCommands === "function") {
-    withTelegramApiErrorLogging({
-      operation: "deleteMyCommands",
-      runtime,
-      fn: () => bot.api.deleteMyCommands(),
-    })
-      .catch(() => {})
+    const commandScopes: Array<
+      undefined | { type: "all_private_chats" | "all_group_chats" | "all_chat_administrators" }
+    > = [
+      undefined,
+      { type: "all_private_chats" },
+      { type: "all_group_chats" },
+      { type: "all_chat_administrators" },
+    ];
+    Promise.resolve()
+      .then(async () => {
+        for (const scope of commandScopes) {
+          await withTelegramApiErrorLogging({
+            operation: "deleteMyCommands",
+            runtime,
+            fn: () => (scope ? bot.api.deleteMyCommands({ scope }) : bot.api.deleteMyCommands()),
+          }).catch(() => undefined);
+        }
+      })
       .then(registerCommands)
       .catch(() => {});
   } else {

@@ -477,6 +477,8 @@ importers:
         specifier: workspace:*
         version: link:../..
 
+  extensions/subscription: {}
+
   extensions/telegram:
     devDependencies:
       openclaw:

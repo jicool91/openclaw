@@ -8,9 +8,9 @@
 
 ### Текущая реализация
 
-**Файл**: `/data/.openclaw/users.json` (временно)
+**Файл**: `/data/.openclaw/users.db` (SQLite)
 
-**Планируется**: SQLite или PostgreSQL
+**Планируется далее**: PostgreSQL при росте нагрузки
 
 ---
 

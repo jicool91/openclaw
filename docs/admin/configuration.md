@@ -245,25 +245,7 @@ When expired user:
 
 ## Конфигурация хранилища
 
-### JSON (по умолчанию)
-
-```yaml
-storage:
-  type: "json"
-  path: "/data/.openclaw/users.json"
-```
-
-**Преимущества**:
-
-- Просто настроить
-- Не требует БД
-
-**Недостатки**:
-
-- Не масштабируется (>1000 пользователей)
-- Нет транзакций
-
-### SQLite
+### SQLite (по умолчанию)
 
 ```yaml
 storage:
@@ -280,6 +262,16 @@ storage:
 **Недостатки**:
 
 - Файловая БД (не подходит для multi-instance)
+
+### Legacy JSON (только миграция)
+
+```yaml
+storage:
+  type: "json"
+  path: "/data/.openclaw/users.json"
+```
+
+Используется только как источник одноразового импорта в `users.db` при старте.
 
 ### PostgreSQL
 

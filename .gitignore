@@ -3,7 +3,6 @@ node_modules
 .env
 docker-compose.extra.yml
 dist
-pnpm-lock.yaml
 bun.lock
 bun.lockb
 coverage
@@ -39,6 +38,9 @@ apps/ios/*.xcodeproj/
 apps/ios/*.xcworkspace/
 apps/ios/.swiftpm/
 vendor/
+# Required by Docker/Railway build to generate Canvas A2UI bundle.
+!vendor/a2ui/
+!vendor/a2ui/**
 apps/ios/Clawdbot.xcodeproj/
 apps/ios/Clawdbot.xcodeproj/**
 apps/macos/.build/**
@@ -50,6 +52,8 @@ vendor/a2ui/renderers/lit/dist/
 src/canvas-host/a2ui/*.bundle.js
 src/canvas-host/a2ui/*.map
 .bundle.hash
+!src/canvas-host/a2ui/a2ui.bundle.js
+!src/canvas-host/a2ui/.bundle.hash
 
 # fastlane (iOS)
 apps/ios/fastlane/README.md
@@ -70,8 +74,8 @@ apps/ios/*.mobileprovision
 # Local untracked files
 .local/
 docs/.local/
-IDENTITY.md
-USER.md
+/IDENTITY.md
+/USER.md
 .tgz
 .idea
 
@@ -82,4 +86,4 @@ USER.md
 /memory/
 .agent/*.json
 !.agent/workflows/
-local/
+/local/

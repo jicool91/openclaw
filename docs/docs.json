@@ -53,7 +53,13 @@
         "groups": [
           {
             "group": "Введение",
-            "pages": ["index", "start/features", "start/architecture", "start/roadmap"]
+            "pages": [
+              "index",
+              "start/features",
+              "start/architecture",
+              "start/tech-stack",
+              "start/roadmap"
+            ]
           },
           {
             "group": "Для пользователей",

@@ -54,8 +54,9 @@ git push origin main
 | `deploy`      | Задеплоить (git push)                |
 | `restart`     | Перезапустить сервис                 |
 | `health`      | Проверить health gateway             |
+| `set-admin`   | Установить `ADMIN_TELEGRAM_IDS`      |
 
-**Примечание:** Все команды используют явные флаги для идентификации проекта, окружения и сервиса. Никогда не используйте `railway login` или `railway link` напрямую - это может отвязать проект от Railway Helper.
+**Примечание:** Команды используют фиксированные ID сервиса/окружения из скрипта. Если Railway уже настроен, работайте через helper и не запускайте `railway login`/`railway link` в этом репозитории.
 
 ## Переменные окружения (Railway)
 
@@ -67,6 +68,9 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 
 # Admin IDs (owner access)
 ADMIN_TELEGRAM_IDS=YOUR_TELEGRAM_ID,ANOTHER_ID
+
+# Persistence (must match mounted Railway volume)
+DATA_DIR=/data
 
 # AI Models (хотя бы один)
 ANTHROPIC_API_KEY=sk-ant-...
@@ -99,7 +103,7 @@ Mount Path: /data
 
 Это сохранит:
 
-- `/data/.openclaw/users.json` (база пользователей)
+- `/data/.openclaw/users.db` (SQLite база пользователей)
 - `/data/workspace` (рабочее пространство агента)
 - Логи и сессии
 
@@ -194,7 +198,7 @@ SSH в Railway и проверить:
 
 # Внутри SSH:
 ls -la /data/.openclaw/
-cat /data/.openclaw/users.json
+ls -la /data/.openclaw/users.db
 ```
 
 ### База пользователей потерялась
@@ -243,8 +247,8 @@ ss -tlnp
 # Проверить логи
 tail -f /app/logs/*.log
 
-# Проверить users.json
-cat /data/.openclaw/users.json | jq .
+# Проверить users.db
+ls -la /data/.openclaw/users.db
 ```
 
 ## Railway IDs

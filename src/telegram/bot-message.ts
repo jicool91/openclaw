@@ -82,7 +82,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     }
 
     // Check access control (subscription/trial/limits)
-    const userId = primaryCtx.from?.id;
+    const userId = primaryCtx.message.from?.id;
     if (userId) {
       try {
         // Get or create user
@@ -91,9 +91,9 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
           // New user - create with trial
           user = await userStore.createUser({
             telegramUserId: userId,
-            firstName: primaryCtx.from?.first_name,
-            lastName: primaryCtx.from?.last_name,
-            username: primaryCtx.from?.username,
+            firstName: primaryCtx.message.from?.first_name,
+            lastName: primaryCtx.message.from?.last_name,
+            username: primaryCtx.message.from?.username,
             role: "trial",
           });
         }
@@ -108,8 +108,8 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
           return; // Block message
         }
 
-        // Increment message counter before processing
-        await userStore.incrementMessageCount(userId);
+        // Increment message counter before processing (0 tokens/cost for now)
+        await userStore.incrementUsage(userId, 0, 0);
       } catch (err) {
         runtime.error?.(`telegram: access control check failed for user ${userId}: ${String(err)}`);
         // Continue processing on error to avoid blocking users

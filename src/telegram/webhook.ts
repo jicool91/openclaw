@@ -36,7 +36,7 @@ export async function startTelegramWebhook(opts: {
   const host = opts.host ?? "0.0.0.0";
   const runtime = opts.runtime ?? defaultRuntime;
   const diagnosticsEnabled = isDiagnosticsEnabled(opts.config);
-  const bot = await createTelegramBot({
+  const bot = createTelegramBot({
     token: opts.token,
     runtime,
     proxyFetch: opts.fetch,

@@ -111,7 +111,7 @@ export function getTelegramSequentialKey(ctx: {
   return "telegram:unknown";
 }
 
-export async function createTelegramBot(opts: TelegramBotOptions) {
+export function createTelegramBot(opts: TelegramBotOptions) {
   const runtime: RuntimeEnv = opts.runtime ?? {
     log: console.log,
     error: console.error,
@@ -153,28 +153,27 @@ export async function createTelegramBot(opts: TelegramBotOptions) {
     runtime.error?.(danger(`telegram bot error: ${formatUncaughtError(err)}`));
   });
 
-  // Initialize UserStore for subscription management
+  // Initialize UserStore for subscription management (lazy load)
   const dataDir = process.env.DATA_DIR ?? process.env.HOME ?? "/tmp";
   const userStore = new UserStore(dataDir);
-  try {
-    await userStore.load();
-    runtime.log?.(`telegram: user store loaded from ${dataDir}/.openclaw/users.json`);
-  } catch (err) {
-    runtime.error?.(danger(`telegram: failed to load user store: ${String(err)}`));
-  }
 
-  // Initialize owners from ADMIN_TELEGRAM_IDS environment variable
+  // Load user store and initialize owners asynchronously (non-blocking)
   const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
-  if (adminIds.length > 0) {
-    try {
-      await initializeOwners(userStore, adminIds);
-      runtime.log?.(
-        `telegram: initialized ${adminIds.length} owner${adminIds.length > 1 ? "s" : ""}`,
-      );
-    } catch (err) {
-      runtime.error?.(danger(`telegram: failed to initialize owners: ${String(err)}`));
-    }
-  }
+  Promise.resolve()
+    .then(async () => {
+      await userStore.load();
+      runtime.log?.(`telegram: user store loaded from ${dataDir}/.openclaw/users.json`);
+
+      if (adminIds.length > 0) {
+        await initializeOwners(userStore, adminIds);
+        runtime.log?.(
+          `telegram: initialized ${adminIds.length} owner${adminIds.length > 1 ? "s" : ""}`,
+        );
+      }
+    })
+    .catch((err) => {
+      runtime.error?.(danger(`telegram: failed to initialize user store: ${String(err)}`));
+    });
 
   const recentUpdates = createTelegramUpdateDedupe();
   let lastUpdateId =

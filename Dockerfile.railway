@@ -25,6 +25,8 @@ RUN set -eux; \
     install -m 0755 /tmp/gog /usr/local/bin/gog; \
     rm -f /tmp/gog /tmp/gog.tgz /tmp/CHANGELOG.md /tmp/README.md /tmp/LICENSE
 
+RUN npm i -g clawhub
+
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
     else \

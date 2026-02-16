@@ -55,6 +55,8 @@ git push origin main
 | `restart`     | Перезапустить сервис                 |
 | `health`      | Проверить health gateway             |
 
+**Примечание:** Все команды используют явные флаги для идентификации проекта, окружения и сервиса. Никогда не используйте `railway login` или `railway link` напрямую - это может отвязать проект от Railway Helper.
+
 ## Переменные окружения (Railway)
 
 Обязательные:
@@ -262,6 +264,8 @@ export RAILWAY_PROJECT_ID=your-project-id
 export RAILWAY_ENV_ID=your-env-id
 export RAILWAY_SERVICE_ID=your-service-id
 ```
+
+**Важно:** Railway Helper использует **явные флаги** (`--project`, `--environment`, `--service`) вместо `railway link` или `railway login`. Это предотвращает случайную отвязку проекта.
 
 ## Useful Links
 

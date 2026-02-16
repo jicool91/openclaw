@@ -45,7 +45,10 @@ export class UserStore {
 
       this.loaded = true;
     } catch (error) {
-      throw new Error(`Failed to load user store: ${error}`, { cause: error });
+      throw new Error(
+        `Failed to load user store: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
     }
   }
 
@@ -62,7 +65,10 @@ export class UserStore {
       await writeFile(tmpPath, data, "utf-8");
       await rename(tmpPath, this.filePath);
     } catch (error) {
-      throw new Error(`Failed to save user store: ${error}`, { cause: error });
+      throw new Error(
+        `Failed to save user store: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
     }
   }
 

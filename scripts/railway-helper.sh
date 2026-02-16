@@ -51,48 +51,39 @@ check_railway_cli() {
 
 cmd_status() {
   echo -e "${BLUE}📊 Railway Status${NC}"
-  railway status \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID" \
-    --json || railway status \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID"
+  railway status --json || railway status
 }
 
 cmd_logs() {
   echo -e "${BLUE}📜 Railway Logs (last 100 lines)${NC}"
   railway logs \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID" \
-    --service "$SERVICE_ID" \
+    -s openclaw-gateway \
+    -e production \
     --deployment
 }
 
 cmd_logs_follow() {
   echo -e "${BLUE}📜 Railway Logs (following...)${NC}"
   echo "Press Ctrl+C to stop"
+  # Note: Railway CLI doesn't support --follow, use web dashboard instead
   railway logs \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID" \
-    --service "$SERVICE_ID" \
-    --deployment \
-    --follow
+    -s openclaw-gateway \
+    -e production \
+    --deployment
 }
 
 cmd_ssh() {
   echo -e "${BLUE}🔐 Opening SSH session${NC}"
-  railway ssh \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID" \
-    --service "$SERVICE_ID"
+  railway shell \
+    -s openclaw-gateway \
+    -e production
 }
 
 cmd_env() {
   echo -e "${BLUE}🔧 Environment Variables${NC}"
   railway variables \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID" \
-    --service "$SERVICE_ID" \
+    -s openclaw-gateway \
+    -e production \
     --json | jq 'to_entries | map({key: .key, value: .value}) | sort_by(.key)'
 }
 
@@ -121,9 +112,8 @@ cmd_deploy() {
 cmd_restart() {
   echo -e "${YELLOW}🔄 Restarting service...${NC}"
   railway redeploy \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID" \
-    --service "$SERVICE_ID" \
+    -s openclaw-gateway \
+    -e production \
     --yes
   echo -e "${GREEN}✅ Restart initiated${NC}"
 }
@@ -133,9 +123,8 @@ cmd_health() {
 
   # Get gateway URL from env
   GW_JSON=$(railway variables \
-    --project "$PROJECT_ID" \
-    --environment "$ENV_ID" \
-    --service "$SERVICE_ID" \
+    -s openclaw-gateway \
+    -e production \
     --json)
   GW_DOMAIN=$(echo "$GW_JSON" | jq -r '.RAILWAY_PUBLIC_DOMAIN // empty')
 

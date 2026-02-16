@@ -155,9 +155,21 @@ OPENAI_API_KEY=sk-...
 BRAVE_API_KEY=BSA...
 FIRECRAWL_API_KEY=fc-...
 
-# Database (опционально, по умолчанию JSON)
+# Google OAuth Web App (для /google и /oauth/google/callback)
+OPENCLAW_GOOGLE_OAUTH_CLIENT_ID=1234567890-xxxxx.apps.googleusercontent.com
+OPENCLAW_GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-xxxxx
+OPENCLAW_PUBLIC_URL=https://openclaw-gateway-production-8628.up.railway.app
+
+# Database (опционально, по умолчанию SQLite users.db)
 # DATABASE_URL=postgresql://...
 ```
+
+Для Google OAuth Web App:
+
+- В Google Cloud Console добавьте `Authorized redirect URI` строго в формате:
+  `https://<ваш-домен>/oauth/google/callback`
+- Если используете `OPENCLAW_PUBLIC_URL`, это будет:
+  `${OPENCLAW_PUBLIC_URL}/oauth/google/callback`
 
 ---
 
@@ -244,7 +256,12 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 BRAVE_API_KEY=BSA...
 FIRECRAWL_API_KEY=fc-...
+OPENCLAW_GOOGLE_OAUTH_CLIENT_ID=1234567890-xxxxx.apps.googleusercontent.com
+OPENCLAW_GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-xxxxx
+OPENCLAW_PUBLIC_URL=https://openclaw-gateway-production-8628.up.railway.app
 ```
+
+Для стабильной OAuth интеграции flow использует `access_type=offline` + `prompt=consent`, чтобы получать `refresh_token`.
 
 ### 7.3 Настройте Persistent Volume
 

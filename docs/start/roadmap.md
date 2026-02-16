@@ -27,6 +27,7 @@
 | 8   | Owner analytics `/admin stats`                                | 🔲     | Операционный контроль продукта                                                      | Лёгкая    |
 | 9   | Подписочные уведомления                                       | 🔲     | Удержание подписчиков                                                               | Средняя   |
 | 10  | Webhook rollout в production                                  | 🔲     | Меньше latency и ресурса в проде                                                    | Лёгкая    |
+| 11  | SaaS Google OAuth Web App (`/oauth/google/*`)                 | ✅     | Убираем ручной flow, даём единый callback для подключения Google                    | Средняя   |
 
 ### Зависимости между задачами
 
@@ -35,6 +36,7 @@
 - #2 желателен перед #4 и #8.
 - #3 и #4 логично делать одним эпиком в одном delivery cycle.
 - #6 закрыт и должен быть выставлен в продовом окружении до запуска бота.
+- #11 требует публичный домен (`OPENCLAW_PUBLIC_URL` или `RAILWAY_PUBLIC_DOMAIN`) и Google OAuth Web client credentials.
 
 ### Важные поправки по текущей реализации
 
@@ -42,6 +44,7 @@
 - Webhook mode уже поддержан ядром; это в первую очередь задача rollout-конфига (`webhookUrl` + `webhookSecret`).
 - Для persistence важен не только volume, но и переменная `DATA_DIR=/data`.
 - Owner-role дополнительно enforced на runtime по `ADMIN_TELEGRAM_IDS` при первом сообщении и в `/start`/`/plan`, чтобы admin не оставался в `trial`.
+- SaaS Google OAuth подключен через extension `subscription`: `/oauth/google/start` и `/oauth/google/callback` + команда `/google`.
 
 ## Фаза 1: MVP (текущая)
 
@@ -69,6 +72,7 @@
 | Payment Handlers (pre_checkout, successful_payment) | ✅     | Обёртка | grammY `bot.on("pre_checkout_query")`  |
 | sendInvoice с currency: "XTR"                       | ✅     | Обёртка | grammY `bot.api.sendInvoice()`         |
 | Railway persistence (`DATA_DIR=/data` + volume)     | ✅     | Деплой  | persistent volume + `/data/.openclaw/` |
+| Google OAuth (web callback + SQLite persistence)    | ✅     | Обёртка | Plugin HTTP routes + `users.db`        |
 | Auto-renewal через Telegram                         | 🔲     | Обёртка | subscription_period в sendInvoice      |
 | Refund через refundStarPayment                      | 🔲     | Обёртка | grammY Bot API                         |
 | Plan upgrade (starter → premium)                    | 🔲     | Обёртка | User Store                             |
@@ -120,6 +124,6 @@
 
 1. **Проверь** — есть ли это в ядре OpenClaw? → [docs.openclaw.ai](https://docs.openclaw.ai)
 2. **Если есть** — используй через конфигурацию `openclaw.json`
-3. **Если нет** — создай обёртку в `src/telegram/` (НЕ модифицируй core файлы ядра)
+3. **Если нет** — создай обёртку в extension (`extensions/subscription/` или отдельный plugin) и подключай через Plugin SDK
 4. **Документируй** — укажи в docs что это обёртка и что из ядра используется
 5. **Проверь Context7** — актуальная документация через `mcp__context7__query-docs`

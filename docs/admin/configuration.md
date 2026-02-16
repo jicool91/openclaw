@@ -94,6 +94,30 @@ FIRECRAWL_API_KEY=fc-...
 PERPLEXITY_API_KEY=pplx-...
 ```
 
+### Google OAuth для SaaS (subscription plugin)
+
+```bash
+# Google OAuth Web App credentials
+OPENCLAW_GOOGLE_OAUTH_CLIENT_ID=1234567890-xxxxx.apps.googleusercontent.com
+OPENCLAW_GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-xxxxx
+
+# Public URL for callback generation (Railway domain or custom domain)
+OPENCLAW_PUBLIC_URL=https://openclaw-gateway-production-8628.up.railway.app
+# Or rely on Railway env:
+# RAILWAY_PUBLIC_DOMAIN=openclaw-gateway-production-8628.up.railway.app
+
+# Optional overrides
+# OPENCLAW_GOOGLE_OAUTH_REDIRECT_URI=https://openclaw-gateway-production-8628.up.railway.app/oauth/google/callback
+# OPENCLAW_GOOGLE_OAUTH_SCOPES=openid,email,profile
+# OPENCLAW_GOOGLE_OAUTH_STATE_SECRET=replace-with-random-secret
+```
+
+Важно:
+
+- В Google Cloud Console `Authorized redirect URI` должен **точно** совпадать с callback URL (без расхождений по домену, протоколу и пути).
+- Если вы не задаёте `OPENCLAW_GOOGLE_OAUTH_REDIRECT_URI`, callback берётся как `${OPENCLAW_PUBLIC_URL}/oauth/google/callback`.
+- В OAuth flow используется `access_type=offline` и `prompt=consent`, чтобы получать `refresh_token` для долгоживущей интеграции.
+
 ### База данных (опционально)
 
 ```bash

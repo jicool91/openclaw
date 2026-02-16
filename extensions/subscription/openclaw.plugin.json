@@ -1,10 +1,28 @@
 {
   "id": "subscription",
   "name": "Subscription",
-  "description": "Subscription bootstrap: initializes owner records and prepares persistence state.",
+  "description": "Subscription bootstrap: initializes owner records, persistence state, and SaaS Google OAuth callbacks.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "publicUrl": {
+        "type": "string",
+        "description": "Public base URL used for OAuth links (example: https://your-domain.example)."
+      },
+      "googleOauthStartPath": {
+        "type": "string",
+        "description": "Public path for starting Google OAuth. Defaults to /oauth/google/start."
+      },
+      "googleOauthCallbackPath": {
+        "type": "string",
+        "description": "Public callback path for Google OAuth. Defaults to /oauth/google/callback."
+      },
+      "googleOauthScopes": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional Google OAuth scopes in addition to openid/email/profile."
+      }
+    }
   }
 }

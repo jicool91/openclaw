@@ -101,8 +101,8 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
             username: primaryCtx.message.from?.username,
             role: adminUser ? "owner" : "trial",
           });
-        } else if (adminUser && user.role !== "owner") {
-          // Repair role drift: ADMIN_TELEGRAM_IDS must always stay owner.
+        } else if (adminUser && (user.role !== "owner" || user.trialExpiresAt != null)) {
+          // Repair role drift: ADMIN_TELEGRAM_IDS must always stay owner and never retain trial expiry.
           user = await userStore.updateUser(userId, {
             role: "owner",
             trialExpiresAt: null,

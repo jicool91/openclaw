@@ -126,4 +126,64 @@ describe("telegram bot message processor", () => {
       }
     }
   });
+
+  it("clears stale trial expiry for existing admin owner record", async () => {
+    const previousAdminIds = process.env.ADMIN_TELEGRAM_IDS;
+    process.env.ADMIN_TELEGRAM_IDS = "8521810561";
+    try {
+      buildTelegramMessageContext.mockResolvedValue({ route: { sessionKey: "agent:main:main" } });
+      const userStore = buildUserStoreStub();
+      userStore.getUser = vi.fn().mockResolvedValue({
+        telegramUserId: 8521810561,
+        role: "owner",
+        trialExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        createdAt: Date.now(),
+        messagesUsedToday: 0,
+        lastMessageDate: "2026-02-16",
+        totalMessagesUsed: 0,
+        totalTokensUsed: 0,
+        totalCostUsd: 0,
+      });
+      userStore.updateUser = vi.fn().mockResolvedValue({
+        telegramUserId: 8521810561,
+        role: "owner",
+        trialExpiresAt: null,
+        createdAt: Date.now(),
+        messagesUsedToday: 0,
+        lastMessageDate: "2026-02-16",
+        totalMessagesUsed: 0,
+        totalTokensUsed: 0,
+        totalCostUsd: 0,
+      });
+      const processMessage = createTelegramMessageProcessor({
+        ...baseDeps,
+        userStore,
+      });
+
+      await processMessage(
+        {
+          message: {
+            chat: { id: 8521810561, type: "private" },
+            from: { id: 8521810561, first_name: "Dmitriy", username: "jicool" },
+            message_id: 2,
+          },
+        },
+        [],
+        [],
+        {},
+      );
+
+      expect(userStore.updateUser).toHaveBeenCalledWith(8521810561, {
+        role: "owner",
+        trialExpiresAt: null,
+      });
+      expect(dispatchTelegramMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      if (typeof previousAdminIds === "undefined") {
+        delete process.env.ADMIN_TELEGRAM_IDS;
+      } else {
+        process.env.ADMIN_TELEGRAM_IDS = previousAdminIds;
+      }
+    }
+  });
 });

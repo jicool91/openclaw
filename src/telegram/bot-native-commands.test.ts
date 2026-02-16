@@ -232,4 +232,69 @@ describe("registerTelegramNativeCommands", () => {
       }
     }
   });
+
+  it("clears stale trial expiry for existing admin owner on /plan", async () => {
+    const previousAdminIds = process.env.ADMIN_TELEGRAM_IDS;
+    process.env.ADMIN_TELEGRAM_IDS = "8521810561";
+    try {
+      const handlers: Record<string, (ctx: unknown) => Promise<void>> = {};
+      const userStore = buildUserStoreStub();
+      userStore.getUser = vi.fn().mockResolvedValue({
+        telegramUserId: 8521810561,
+        role: "owner",
+        trialExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        createdAt: Date.now(),
+        messagesUsedToday: 0,
+        lastMessageDate: "2026-02-16",
+        totalMessagesUsed: 0,
+        totalTokensUsed: 0,
+        totalCostUsd: 0,
+      });
+      userStore.updateUser = vi.fn().mockResolvedValue({
+        telegramUserId: 8521810561,
+        role: "owner",
+        trialExpiresAt: null,
+        createdAt: Date.now(),
+        messagesUsedToday: 0,
+        lastMessageDate: "2026-02-16",
+        totalMessagesUsed: 0,
+        totalTokensUsed: 0,
+        totalCostUsd: 0,
+      }) as never;
+
+      registerTelegramNativeCommands({
+        ...buildParams({}, "default"),
+        nativeEnabled: false,
+        nativeSkillsEnabled: false,
+        bot: {
+          api: {
+            setMyCommands: vi.fn().mockResolvedValue(undefined),
+            sendMessage: vi.fn().mockResolvedValue(undefined),
+          },
+          command: vi.fn((name: string, handler: (ctx: unknown) => Promise<void>) => {
+            handlers[name] = handler;
+          }),
+        } as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
+        userStore,
+      });
+
+      const reply = vi.fn().mockResolvedValue(undefined);
+      await handlers.plan?.({
+        from: { id: 8521810561, first_name: "Dmitriy", username: "jicool" },
+        reply,
+      });
+
+      expect(userStore.updateUser).toHaveBeenCalledWith(8521810561, {
+        role: "owner",
+        trialExpiresAt: null,
+      });
+      expect(reply).toHaveBeenCalledWith(expect.stringContaining("План: Owner"));
+    } finally {
+      if (typeof previousAdminIds === "undefined") {
+        delete process.env.ADMIN_TELEGRAM_IDS;
+      } else {
+        process.env.ADMIN_TELEGRAM_IDS = previousAdminIds;
+      }
+    }
+  });
 });

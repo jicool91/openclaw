@@ -835,7 +835,7 @@ export const registerTelegramNativeCommands = ({
     const adminUser = isAdmin(userId, adminIds);
     const existing = await userStore.getUser(userId);
     if (existing) {
-      if (adminUser && existing.role !== "owner") {
+      if (adminUser && (existing.role !== "owner" || existing.trialExpiresAt != null)) {
         return await userStore.updateUser(userId, {
           role: "owner",
           trialExpiresAt: null,

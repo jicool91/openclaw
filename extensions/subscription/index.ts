@@ -85,6 +85,7 @@ async function ensureOwnerUsers(api: OpenClawPluginApi): Promise<void> {
       )
       ON CONFLICT(telegram_user_id) DO UPDATE SET
         role = 'owner',
+        trial_expires_at = NULL,
         updated_at = excluded.updated_at
     `);
 

@@ -11,6 +11,20 @@ WORKDIR /app
 
 COPY . .
 
+# Install gog CLI from official release archive.
+ARG GOGCLI_VERSION=0.11.0
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) gog_arch="amd64" ;; \
+      arm64) gog_arch="arm64" ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/gog.tgz "https://github.com/steipete/gogcli/releases/download/v${GOGCLI_VERSION}/gogcli_${GOGCLI_VERSION}_linux_${gog_arch}.tar.gz"; \
+    tar -xzf /tmp/gog.tgz -C /tmp; \
+    install -m 0755 /tmp/gog /usr/local/bin/gog; \
+    rm -f /tmp/gog /tmp/gog.tgz /tmp/CHANGELOG.md /tmp/README.md /tmp/LICENSE
+
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
     else \

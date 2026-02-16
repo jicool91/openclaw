@@ -138,7 +138,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       }
     };
 
-    const bot = createTelegramBot({
+    const bot = await createTelegramBot({
       token,
       runtime: opts.runtime,
       proxyFetch,

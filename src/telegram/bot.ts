@@ -45,9 +45,9 @@ import {
   resolveTelegramStreamMode,
 } from "./bot/helpers.js";
 import { resolveTelegramFetch } from "./fetch.js";
+import { initializeOwners, parseAdminTelegramIds } from "./owner-config.js";
 import { wasSentByBot } from "./sent-message-cache.js";
 import { UserStore } from "./user-store.js";
-import { initializeOwners, parseAdminTelegramIds } from "./owner-config.js";
 
 export type TelegramBotOptions = {
   token: string;
@@ -111,7 +111,7 @@ export function getTelegramSequentialKey(ctx: {
   return "telegram:unknown";
 }
 
-export function createTelegramBot(opts: TelegramBotOptions) {
+export async function createTelegramBot(opts: TelegramBotOptions) {
   const runtime: RuntimeEnv = opts.runtime ?? {
     log: console.log,
     error: console.error,

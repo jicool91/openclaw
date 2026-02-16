@@ -748,7 +748,6 @@ export const registerTelegramNativeCommands = ({
   }
 
   // Register subscription management commands
-  const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
 
   // /start command
   bot.command("start", async (ctx) => {

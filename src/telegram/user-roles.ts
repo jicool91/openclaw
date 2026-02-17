@@ -1,5 +1,8 @@
 import type { UserRecord, UserRole } from "./user-store.types.js";
 
+const TRIAL_MESSAGES_PER_DAY = 30;
+const EXPIRED_MESSAGES_PER_DAY = 2;
+
 /**
  * Role limits configuration
  */
@@ -20,9 +23,9 @@ export function getRoleMessageLimit(role: UserRole): number | "unlimited" {
     case "subscriber":
       return "unlimited";
     case "trial":
-      return 5;
+      return TRIAL_MESSAGES_PER_DAY;
     case "expired":
-      return 2;
+      return EXPIRED_MESSAGES_PER_DAY;
     default: {
       // Exhaustive check
       const _exhaustive: never = role;
@@ -59,14 +62,14 @@ export function getRoleLimits(role: UserRole): RoleLimits {
       };
     case "trial":
       return {
-        messagesPerDay: 5,
+        messagesPerDay: TRIAL_MESSAGES_PER_DAY,
         canUseTools: false,
         canUseWebSearch: true,
         modelTier: "medium",
       };
     case "expired":
       return {
-        messagesPerDay: 2,
+        messagesPerDay: EXPIRED_MESSAGES_PER_DAY,
         canUseTools: false,
         canUseWebSearch: false,
         modelTier: "basic",

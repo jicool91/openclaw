@@ -13,6 +13,25 @@ import {
 import { dispatchTelegramMessage } from "./bot-message-dispatch.js";
 import { isAdmin, parseAdminTelegramIds } from "./owner-config.js";
 
+const DEFAULT_TRIAL_BURST_WINDOW_MS = 15_000;
+const DEFAULT_TRIAL_BURST_MAX_MESSAGES = 8;
+const DEFAULT_TRIAL_BURST_WARN_COOLDOWN_MS = 30_000;
+const TRIAL_BURST_STATE_MAX_USERS = 5_000;
+
+type TrialBurstState = {
+  windowStartedAt: number;
+  messageCount: number;
+  lastWarnAt: number;
+};
+
+function readPositiveIntEnv(envName: string, fallback: number): number {
+  const value = Number(process.env[envName]);
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(1, Math.floor(value));
+}
+
 /** Dependencies injected once when creating the message processor. */
 type TelegramMessageProcessorDeps = Omit<
   BuildTelegramMessageContextParams,
@@ -53,6 +72,63 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     userStore,
   } = deps;
   const adminIds = parseAdminTelegramIds(process.env.ADMIN_TELEGRAM_IDS);
+  const trialBurstWindowMs = readPositiveIntEnv(
+    "TELEGRAM_TRIAL_BURST_WINDOW_MS",
+    DEFAULT_TRIAL_BURST_WINDOW_MS,
+  );
+  const trialBurstMaxMessages = readPositiveIntEnv(
+    "TELEGRAM_TRIAL_BURST_MAX_MESSAGES",
+    DEFAULT_TRIAL_BURST_MAX_MESSAGES,
+  );
+  const trialBurstWarnCooldownMs = readPositiveIntEnv(
+    "TELEGRAM_TRIAL_BURST_WARN_COOLDOWN_MS",
+    DEFAULT_TRIAL_BURST_WARN_COOLDOWN_MS,
+  );
+  const trialBurstState = new Map<number, TrialBurstState>();
+
+  const pruneTrialBurstState = (now: number) => {
+    if (trialBurstState.size <= TRIAL_BURST_STATE_MAX_USERS) {
+      return;
+    }
+    const staleAfterMs = Math.max(trialBurstWindowMs * 4, trialBurstWarnCooldownMs * 2);
+    for (const [candidateUserId, state] of trialBurstState) {
+      const lastTouch = Math.max(state.windowStartedAt, state.lastWarnAt);
+      if (now - lastTouch > staleAfterMs) {
+        trialBurstState.delete(candidateUserId);
+      }
+      if (trialBurstState.size <= TRIAL_BURST_STATE_MAX_USERS) {
+        break;
+      }
+    }
+  };
+
+  const checkTrialBurstAllowance = (
+    currentUserId: number,
+  ): { allowed: boolean; shouldWarn: boolean } => {
+    const now = Date.now();
+    pruneTrialBurstState(now);
+
+    const current = trialBurstState.get(currentUserId);
+    if (!current || now - current.windowStartedAt >= trialBurstWindowMs) {
+      trialBurstState.set(currentUserId, {
+        windowStartedAt: now,
+        messageCount: 1,
+        lastWarnAt: current?.lastWarnAt ?? 0,
+      });
+      return { allowed: true, shouldWarn: false };
+    }
+
+    current.messageCount += 1;
+    if (current.messageCount <= trialBurstMaxMessages) {
+      return { allowed: true, shouldWarn: false };
+    }
+
+    const shouldWarn = now - current.lastWarnAt >= trialBurstWarnCooldownMs;
+    if (shouldWarn) {
+      current.lastWarnAt = now;
+    }
+    return { allowed: false, shouldWarn };
+  };
 
   return async (
     primaryCtx: TelegramContext,
@@ -117,6 +193,19 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
             await bot.api.sendMessage(userId, deniedMessage);
           }
           return; // Block message
+        }
+
+        if (user.role === "trial" || user.role === "expired") {
+          const burstCheck = checkTrialBurstAllowance(userId);
+          if (!burstCheck.allowed) {
+            if (burstCheck.shouldWarn) {
+              await bot.api.sendMessage(
+                userId,
+                "⚠️ Слишком много сообщений подряд. Подождите несколько секунд и попробуйте снова.",
+              );
+            }
+            return;
+          }
         }
 
         // Increment message counter before processing (0 tokens/cost for now)

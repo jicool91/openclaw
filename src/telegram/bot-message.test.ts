@@ -187,4 +187,94 @@ describe("telegram bot message processor", () => {
       }
     }
   });
+
+  it("rate-limits burst messages for trial users", async () => {
+    const previousWindowMs = process.env.TELEGRAM_TRIAL_BURST_WINDOW_MS;
+    const previousMaxMessages = process.env.TELEGRAM_TRIAL_BURST_MAX_MESSAGES;
+    const previousWarnCooldown = process.env.TELEGRAM_TRIAL_BURST_WARN_COOLDOWN_MS;
+    process.env.TELEGRAM_TRIAL_BURST_WINDOW_MS = "60000";
+    process.env.TELEGRAM_TRIAL_BURST_MAX_MESSAGES = "2";
+    process.env.TELEGRAM_TRIAL_BURST_WARN_COOLDOWN_MS = "1";
+    try {
+      buildTelegramMessageContext.mockResolvedValue({ route: { sessionKey: "agent:main:main" } });
+      const userStore = buildUserStoreStub();
+      userStore.getUser = vi.fn().mockResolvedValue({
+        telegramUserId: 123,
+        role: "trial",
+        trialExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        createdAt: Date.now(),
+        messagesUsedToday: 0,
+        lastMessageDate: "2026-02-16",
+        totalMessagesUsed: 0,
+        totalTokensUsed: 0,
+        totalCostUsd: 0,
+      });
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      const processMessage = createTelegramMessageProcessor({
+        ...baseDeps,
+        bot: { api: { sendMessage } },
+        userStore,
+      });
+
+      await processMessage(
+        {
+          message: {
+            chat: { id: 123, type: "private" },
+            from: { id: 123, first_name: "Trial" },
+            message_id: 1,
+          },
+        },
+        [],
+        [],
+        {},
+      );
+      await processMessage(
+        {
+          message: {
+            chat: { id: 123, type: "private" },
+            from: { id: 123, first_name: "Trial" },
+            message_id: 2,
+          },
+        },
+        [],
+        [],
+        {},
+      );
+      await processMessage(
+        {
+          message: {
+            chat: { id: 123, type: "private" },
+            from: { id: 123, first_name: "Trial" },
+            message_id: 3,
+          },
+        },
+        [],
+        [],
+        {},
+      );
+
+      expect(userStore.incrementUsage).toHaveBeenCalledTimes(2);
+      expect(dispatchTelegramMessage).toHaveBeenCalledTimes(2);
+      expect(sendMessage).toHaveBeenCalledWith(
+        123,
+        expect.stringContaining("Слишком много сообщений подряд"),
+      );
+    } finally {
+      if (typeof previousWindowMs === "undefined") {
+        delete process.env.TELEGRAM_TRIAL_BURST_WINDOW_MS;
+      } else {
+        process.env.TELEGRAM_TRIAL_BURST_WINDOW_MS = previousWindowMs;
+      }
+      if (typeof previousMaxMessages === "undefined") {
+        delete process.env.TELEGRAM_TRIAL_BURST_MAX_MESSAGES;
+      } else {
+        process.env.TELEGRAM_TRIAL_BURST_MAX_MESSAGES = previousMaxMessages;
+      }
+      if (typeof previousWarnCooldown === "undefined") {
+        delete process.env.TELEGRAM_TRIAL_BURST_WARN_COOLDOWN_MS;
+      } else {
+        process.env.TELEGRAM_TRIAL_BURST_WARN_COOLDOWN_MS = previousWarnCooldown;
+      }
+    }
+  });
 });

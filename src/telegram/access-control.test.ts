@@ -48,9 +48,9 @@ describe("access-control", () => {
         role: "trial",
         trialExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         createdAt: Date.now(),
-        messagesUsedToday: 5,
+        messagesUsedToday: 30,
         lastMessageDate: today,
-        totalMessagesUsed: 5,
+        totalMessagesUsed: 30,
         totalTokensUsed: 0,
         totalCostUsd: 0,
       };
@@ -166,9 +166,9 @@ describe("access-control", () => {
         role: "trial",
         trialExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         createdAt: Date.now(),
-        messagesUsedToday: 5, // Hit limit yesterday
+        messagesUsedToday: 30, // Hit limit yesterday
         lastMessageDate: yesterdayStr,
-        totalMessagesUsed: 5,
+        totalMessagesUsed: 30,
         totalTokensUsed: 0,
         totalCostUsd: 0,
       };
@@ -206,7 +206,7 @@ describe("access-control", () => {
         totalCostUsd: 0,
       };
 
-      expect(getRemainingMessages(user)).toBe(2); // 5 - 3 = 2
+      expect(getRemainingMessages(user)).toBe(27); // 30 - 3 = 27
     });
 
     it("returns 0 when limit reached", () => {
@@ -233,14 +233,14 @@ describe("access-control", () => {
         telegramUserId: 123,
         role: "trial",
         createdAt: Date.now(),
-        messagesUsedToday: 5,
+        messagesUsedToday: 30,
         lastMessageDate: yesterdayStr,
-        totalMessagesUsed: 5,
+        totalMessagesUsed: 30,
         totalTokensUsed: 0,
         totalCostUsd: 0,
       };
 
-      expect(getRemainingMessages(user)).toBe(5); // Full limit on new day
+      expect(getRemainingMessages(user)).toBe(30); // Full limit on new day
     });
   });
 

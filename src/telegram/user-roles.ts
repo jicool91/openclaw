@@ -1,6 +1,6 @@
 import type { UserRecord, UserRole } from "./user-store.types.js";
 
-const TRIAL_MESSAGES_PER_DAY = 30;
+const TRIAL_MESSAGES_PER_DAY = 20;
 const EXPIRED_MESSAGES_PER_DAY = 2;
 
 /**

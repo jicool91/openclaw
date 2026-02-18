@@ -26,8 +26,8 @@ describe("user-roles", () => {
       expect(getRoleMessageLimit("subscriber")).toBe("unlimited");
     });
 
-    it("returns 30 for trial", () => {
-      expect(getRoleMessageLimit("trial")).toBe(30);
+    it("returns 20 for trial", () => {
+      expect(getRoleMessageLimit("trial")).toBe(20);
     });
 
     it("returns 2 for expired", () => {
@@ -49,7 +49,7 @@ describe("user-roles", () => {
     it("returns limited access for trial", () => {
       const limits = getRoleLimits("trial");
       expect(limits).toEqual({
-        messagesPerDay: 30,
+        messagesPerDay: 20,
         canUseTools: false,
         canUseWebSearch: true,
         modelTier: "medium",

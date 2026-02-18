@@ -60,17 +60,18 @@ cmd_logs() {
   railway logs \
     -s "$SERVICE_ID" \
     -e "$ENV_ID" \
-    --deployment
+    --deployment \
+    --json
 }
 
 cmd_logs_follow() {
   echo -e "${BLUE}📜 Railway Logs (following...)${NC}"
-  echo "Press Ctrl+C to stop"
   # Note: Railway CLI doesn't support --follow, use web dashboard instead
   railway logs \
     -s "$SERVICE_ID" \
     -e "$ENV_ID" \
-    --deployment
+    --deployment \
+    --json
 }
 
 cmd_ssh() {

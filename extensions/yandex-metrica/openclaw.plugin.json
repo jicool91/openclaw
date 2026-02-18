@@ -1,0 +1,16 @@
+{
+  "id": "yandex-metrica",
+  "name": "Yandex Metrica",
+  "description": "Fetch analytics data from Yandex Metrica counters (visits, users, custom metrics).",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "oauthToken": { "type": "string", "description": "Yandex OAuth token for Metrica API." }
+    },
+    "required": ["oauthToken"]
+  },
+  "uiHints": {
+    "oauthToken": { "label": "OAuth Token", "sensitive": true, "placeholder": "y0_AgAAAA..." }
+  }
+}

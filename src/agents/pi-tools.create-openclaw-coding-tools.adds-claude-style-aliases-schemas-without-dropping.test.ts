@@ -36,8 +36,10 @@ describe("createOpenClawCodingTools", () => {
       const props = params.properties ?? {};
 
       expect(props.file_path).toEqual(props.path);
+      // "path" is removed from required; alias "file_path" takes its place so
+      // the model knows it must supply one of the two (normalizeToolParams maps file_path→path).
       expect(params.required ?? []).not.toContain("path");
-      expect(params.required ?? []).not.toContain("file_path");
+      expect(params.required ?? []).toContain("file_path");
     });
 
     it("normalizes file_path to path and enforces required groups at runtime", async () => {

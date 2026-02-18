@@ -181,6 +181,11 @@ export function patchToolSchemaForClaudeCompatibility(tool: AnyAgentTool): AnyAg
     const idx = required.indexOf(original);
     if (idx !== -1) {
       required.splice(idx, 1);
+      // Add alias to required so model knows at least one of them is needed.
+      // normalizeToolParams maps alias → original before execution, so runtime is unaffected.
+      if (!required.includes(alias)) {
+        required.push(alias);
+      }
       changed = true;
     }
   }

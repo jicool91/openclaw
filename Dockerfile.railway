@@ -7,10 +7,7 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 RUN corepack enable && corepack prepare pnpm@10.23.0 --activate
 
-WORKDIR /app
-
-COPY . .
-
+# Install global tools before COPY so project .npmrc doesn't interfere.
 # Install gog CLI from official release archive.
 ARG GOGCLI_VERSION=0.11.0
 RUN set -eux; \
@@ -25,7 +22,11 @@ RUN set -eux; \
     install -m 0755 /tmp/gog /usr/local/bin/gog; \
     rm -f /tmp/gog /tmp/gog.tgz /tmp/CHANGELOG.md /tmp/README.md /tmp/LICENSE
 
-RUN npm i -g clawhub
+RUN npm i -g clawhub || echo "clawhub install failed (non-fatal, gateway runs without it)"
+
+WORKDIR /app
+
+COPY . .
 
 RUN if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \

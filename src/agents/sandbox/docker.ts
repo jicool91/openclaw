@@ -11,6 +11,22 @@ const HOT_CONTAINER_WINDOW_MS = 5 * 60 * 1000;
 
 export function execDocker(args: string[], opts?: { allowFailure?: boolean }) {
   return new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
+    let settled = false;
+    const finishResolve = (value: { stdout: string; stderr: string; code: number }) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(value);
+    };
+    const finishReject = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(error);
+    };
+
     const child = spawn("docker", args, {
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -22,13 +38,28 @@ export function execDocker(args: string[], opts?: { allowFailure?: boolean }) {
     child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
     });
-    child.on("close", (code) => {
-      const exitCode = code ?? 0;
-      if (exitCode !== 0 && !opts?.allowFailure) {
-        reject(new Error(stderr.trim() || `docker ${args.join(" ")} failed`));
+    child.on("error", (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (opts?.allowFailure) {
+        finishResolve({
+          stdout,
+          stderr: stderr + message,
+          code: 127,
+        });
         return;
       }
-      resolve({ stdout, stderr, code: exitCode });
+      finishReject(new Error(stderr.trim() || message || `docker ${args.join(" ")} failed`));
+    });
+    child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      const exitCode = code ?? 0;
+      if (exitCode !== 0 && !opts?.allowFailure) {
+        finishReject(new Error(stderr.trim() || `docker ${args.join(" ")} failed`));
+        return;
+      }
+      finishResolve({ stdout, stderr, code: exitCode });
     });
   });
 }

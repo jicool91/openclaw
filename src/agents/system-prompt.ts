@@ -522,6 +522,35 @@ export function buildAgentSystemPrompt(params: {
       promptMode === "minimal" ? "## Subagent Context" : "## Group Chat Context";
     lines.push(contextHeader, extraSystemPrompt, "");
   }
+  // Channel-aware reply style: messaging channels get brevity guidance
+  if (runtimeChannel && !isMinimal) {
+    const messagingChannels = new Set([
+      "telegram",
+      "signal",
+      "discord",
+      "slack",
+      "whatsapp",
+      "imessage",
+      "matrix",
+      "msteams",
+      "irc",
+      "line",
+      "zalo",
+      "googlechat",
+    ]);
+    if (messagingChannels.has(runtimeChannel)) {
+      lines.push(
+        "## Reply Style",
+        "You are replying via a messaging channel. Follow these rules:",
+        "- Be concise and direct. Avoid filler, preamble, and unnecessary detail.",
+        "- Aim for 1-3 short paragraphs unless the user explicitly asks for a detailed explanation.",
+        "- Send ONE complete reply. Do not split your thoughts across multiple messages.",
+        "- If the answer is complex, give a brief summary first; offer details only if asked.",
+        "- Skip greetings, sign-offs, and excessive formatting.",
+        "",
+      );
+    }
+  }
   if (params.reactionGuidance) {
     const { level, channel } = params.reactionGuidance;
     const guidanceText =

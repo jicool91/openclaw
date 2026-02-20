@@ -46,5 +46,8 @@ RUN pnpm ui:build
 
 ENV NODE_ENV=production
 
-# Start gateway server
-CMD ["sh", "-lc", "exec node dist/index.js gateway --bind lan --port 8080 --allow-unconfigured ${OPENCLAW_GATEWAY_TOKEN:+--token \"$OPENCLAW_GATEWAY_TOKEN\"}"]
+# Ensure entrypoint is executable
+RUN chmod +x scripts/railway-entrypoint.sh
+
+# Start gateway (entrypoint sets full permissions, then starts gateway)
+CMD ["sh", "-lc", "exec scripts/railway-entrypoint.sh"]

@@ -35,6 +35,7 @@ node dist/index.js config set tools.message.crossContext.allowWithinProvider tru
 node dist/index.js config set tools.message.crossContext.allowAcrossProviders true 2>/dev/null || true
 node dist/index.js config set tools.message.broadcast.enabled true 2>/dev/null || true
 node dist/index.js config set agents.defaults.sandbox.mode off 2>/dev/null || true
+node dist/index.js config set agents.defaults.reasoningDefault off 2>/dev/null || true
 
 echo "[entrypoint] Config permissions applied"
 

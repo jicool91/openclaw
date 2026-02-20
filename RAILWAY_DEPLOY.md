@@ -55,6 +55,9 @@ git push origin main
 | `restart`     | Перезапустить сервис                 |
 | `health`      | Проверить health gateway             |
 | `set-admin`   | Установить `ADMIN_TELEGRAM_IDS`      |
+| `open`        | Открыть проект в браузере            |
+| `env-set`     | Установить переменную окружения      |
+| `env-unset`   | Удалить переменную окружения         |
 
 **Примечание:** Команды используют фиксированные ID сервиса/окружения из скрипта. Если Railway уже настроен, работайте через helper и не запускайте `railway login`/`railway link` в этом репозитории.
 
@@ -69,8 +72,8 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 # Admin IDs (owner access)
 ADMIN_TELEGRAM_IDS=YOUR_TELEGRAM_ID,ANOTHER_ID
 
-# Persistence (must match mounted Railway volume)
-DATA_DIR=/data
+# Persistence (must match mounted Railway volume; code reads OPENCLAW_STATE_DIR)
+OPENCLAW_STATE_DIR=/data
 
 # AI Models (хотя бы один)
 ANTHROPIC_API_KEY=sk-ant-...

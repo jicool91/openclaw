@@ -33,6 +33,9 @@ usage() {
   echo "  restart      - перезапустить сервис"
   echo "  health       - проверить health gateway"
   echo "  set-admin <id[,id2]> - установить ADMIN_TELEGRAM_IDS"
+  echo "  open         - открыть проект в браузере"
+  echo "  env-set <K=V>  - установить переменную окружения"
+  echo "  env-unset <KEY> - удалить переменную окружения"
   echo "  help         - показать эту справку"
   echo ""
   echo "Environment Variables:"
@@ -144,6 +147,42 @@ cmd_health() {
   }
 }
 
+cmd_open() {
+  echo -e "${BLUE}🌐 Opening Railway project in browser${NC}"
+  railway open \
+    -p "$PROJECT_ID"
+}
+
+cmd_env_set() {
+  local kv="${1:-}"
+  if [ -z "$kv" ]; then
+    echo -e "${RED}❌ Missing KEY=VALUE${NC}"
+    echo "Usage: $0 env-set KEY=VALUE"
+    exit 1
+  fi
+  echo -e "${YELLOW}🔧 Setting ${kv}${NC}"
+  railway variables \
+    -s "$SERVICE_ID" \
+    -e "$ENV_ID" \
+    --set "$kv"
+  echo -e "${GREEN}✅ Variable set${NC}"
+}
+
+cmd_env_unset() {
+  local key="${1:-}"
+  if [ -z "$key" ]; then
+    echo -e "${RED}❌ Missing KEY${NC}"
+    echo "Usage: $0 env-unset KEY"
+    exit 1
+  fi
+  echo -e "${YELLOW}🔧 Unsetting ${key}${NC}"
+  railway variables \
+    -s "$SERVICE_ID" \
+    -e "$ENV_ID" \
+    --unset "$key"
+  echo -e "${GREEN}✅ Variable unset${NC}"
+}
+
 cmd_set_admin() {
   local ids="${1:-}"
   if [ -z "$ids" ]; then
@@ -195,6 +234,18 @@ case "$COMMAND" in
   health)
     check_railway_cli
     cmd_health
+    ;;
+  open)
+    check_railway_cli
+    cmd_open
+    ;;
+  env-set)
+    check_railway_cli
+    cmd_env_set "$ARG1"
+    ;;
+  env-unset)
+    check_railway_cli
+    cmd_env_unset "$ARG1"
     ;;
   set-admin)
     check_railway_cli

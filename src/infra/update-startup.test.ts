@@ -8,6 +8,10 @@ vi.mock("./openclaw-root.js", () => ({
   resolveOpenClawPackageRoot: vi.fn(),
 }));
 
+vi.mock("./update-runner.js", () => ({
+  runGatewayUpdate: vi.fn(),
+}));
+
 vi.mock("./update-check.js", async () => {
   const actual = await vi.importActual<typeof import("./update-check.js")>("./update-check.js");
   return {
@@ -122,5 +126,47 @@ describe("update-startup", () => {
 
     expect(log.info).not.toHaveBeenCalled();
     await expect(fs.stat(path.join(tempDir, "update-check.json"))).rejects.toThrow();
+  });
+
+  it("runs auto update once for a newly detected version when enabled", async () => {
+    const { resolveOpenClawPackageRoot } = await import("./openclaw-root.js");
+    const { checkUpdateStatus, resolveNpmChannelTag } = await import("./update-check.js");
+    const { runGatewayUpdate } = await import("./update-runner.js");
+    const { runGatewayUpdateCheck } = await import("./update-startup.js");
+
+    vi.mocked(resolveOpenClawPackageRoot).mockResolvedValue("/opt/openclaw");
+    vi.mocked(checkUpdateStatus).mockResolvedValue({
+      root: "/opt/openclaw",
+      installKind: "package",
+      packageManager: "npm",
+    } satisfies UpdateCheckResult);
+    vi.mocked(resolveNpmChannelTag).mockResolvedValue({
+      tag: "latest",
+      version: "2.0.0",
+    });
+    vi.mocked(runGatewayUpdate).mockResolvedValue({
+      status: "ok",
+      mode: "npm",
+      steps: [],
+      durationMs: 10,
+    });
+
+    const log = { info: vi.fn() };
+    await runGatewayUpdateCheck({
+      cfg: { update: { channel: "stable", autoApplyOnStart: true } },
+      log,
+      isNixMode: false,
+      allowInTests: true,
+    });
+
+    expect(runGatewayUpdate).toHaveBeenCalledTimes(1);
+    expect(runGatewayUpdate).toHaveBeenCalledWith({ channel: "stable" });
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining("auto update start"));
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining("auto update result: ok"));
+
+    const statePath = path.join(tempDir, "update-check.json");
+    const raw = await fs.readFile(statePath, "utf-8");
+    const parsed = JSON.parse(raw) as { lastAutoApplyStatus?: string };
+    expect(parsed.lastAutoApplyStatus).toBe("ok");
   });
 });

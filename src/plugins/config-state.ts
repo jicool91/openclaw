@@ -16,7 +16,6 @@ export type NormalizedPluginsConfig = {
 export const BUNDLED_ENABLED_BY_DEFAULT = new Set<string>([
   "device-pair",
   "phone-control",
-  "subscription",
   "talk-voice",
 ]);
 

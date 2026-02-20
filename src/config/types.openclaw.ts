@@ -63,6 +63,8 @@ export type OpenClawConfig = {
     channel?: "stable" | "beta" | "dev";
     /** Check for updates on gateway start (npm installs only). */
     checkOnStart?: boolean;
+    /** Apply package updates automatically on gateway start when a newer version is available. */
+    autoApplyOnStart?: boolean;
   };
   browser?: BrowserConfig;
   ui?: {

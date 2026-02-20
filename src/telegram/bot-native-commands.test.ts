@@ -17,23 +17,6 @@ describe("registerTelegramNativeCommands", () => {
     listSkillCommandsForAgents.mockReset();
   });
 
-  const buildUserStoreStub = () =>
-    ({
-      getUser: vi.fn().mockResolvedValue(null),
-      createUser: vi.fn().mockResolvedValue({
-        telegramUserId: 1,
-        role: "trial",
-        createdAt: Date.now(),
-        messagesUsedToday: 0,
-        lastMessageDate: "2026-02-16",
-        totalMessagesUsed: 0,
-        totalTokensUsed: 0,
-        totalCostUsd: 0,
-      }),
-      updateUser: vi.fn(),
-      incrementUsage: vi.fn().mockResolvedValue(undefined),
-    }) as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["userStore"];
-
   const buildParams = (cfg: OpenClawConfig, accountId = "default") => ({
     bot: {
       api: {
@@ -61,7 +44,6 @@ describe("registerTelegramNativeCommands", () => {
     }),
     shouldSkipUpdate: () => false,
     opts: { token: "token" },
-    userStore: buildUserStoreStub(),
   });
 
   it("scopes skill commands when account binding exists", () => {
@@ -128,14 +110,9 @@ describe("registerTelegramNativeCommands", () => {
       description: string;
     }>;
     expect(registeredCommands).toHaveLength(100);
-    expect(registeredCommands).toEqual([
-      { command: "start", description: "Начать работу с ботом" },
-      { command: "plan", description: "Показать текущий план и статистику" },
-      { command: "subscribe", description: "Оформить подписку" },
-      ...customCommands.slice(0, 97),
-    ]);
+    expect(registeredCommands).toEqual(customCommands.slice(0, 100));
     expect(runtimeLog).toHaveBeenCalledWith(
-      "telegram: truncating 123 commands to 100 (Telegram Bot API limit)",
+      "telegram: truncating 120 commands to 100 (Telegram Bot API limit)",
     );
   });
 
@@ -166,136 +143,35 @@ describe("registerTelegramNativeCommands", () => {
     expect(deleteMyCommands).toHaveBeenNthCalledWith(4, {
       scope: { type: "all_chat_administrators" },
     });
-    expect(setMyCommands).toHaveBeenCalledWith([
-      { command: "start", description: "Начать работу с ботом" },
-      { command: "plan", description: "Показать текущий план и статистику" },
-      { command: "subscribe", description: "Оформить подписку" },
-    ]);
+    expect(setMyCommands).not.toHaveBeenCalled();
   });
 
-  it("creates owner role for ADMIN_TELEGRAM_IDS user on /start", async () => {
-    const previousAdminIds = process.env.ADMIN_TELEGRAM_IDS;
-    process.env.ADMIN_TELEGRAM_IDS = "8521810561";
-    try {
-      const handlers: Record<string, (ctx: unknown) => Promise<void>> = {};
-      const userStore = buildUserStoreStub();
-      const createUser = vi.fn().mockResolvedValue({
-        telegramUserId: 8521810561,
-        role: "owner",
-        createdAt: Date.now(),
-        messagesUsedToday: 0,
-        lastMessageDate: "2026-02-16",
-        totalMessagesUsed: 0,
-        totalTokensUsed: 0,
-        totalCostUsd: 0,
-      });
-      userStore.createUser = createUser as never;
+  it("ignores legacy subscription plugin config for command menus", () => {
+    const setMyCommands = vi.fn().mockResolvedValue(undefined);
 
-      registerTelegramNativeCommands({
-        ...buildParams({}, "default"),
-        nativeEnabled: false,
-        nativeSkillsEnabled: false,
-        bot: {
-          api: {
-            setMyCommands: vi.fn().mockResolvedValue(undefined),
-            sendMessage: vi.fn().mockResolvedValue(undefined),
+    registerTelegramNativeCommands({
+      ...buildParams(
+        {
+          commands: { native: false },
+          plugins: {
+            entries: {
+              subscription: { enabled: true },
+            },
           },
-          command: vi.fn((name: string, handler: (ctx: unknown) => Promise<void>) => {
-            handlers[name] = handler;
-          }),
-        } as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
-        userStore,
-      });
-
-      const reply = vi.fn().mockResolvedValue(undefined);
-      await handlers.start?.({
-        from: {
-          id: 8521810561,
-          first_name: "Dmitriy",
-          username: "jicool",
         },
-        reply,
-      });
+        "default",
+      ),
+      nativeEnabled: false,
+      nativeSkillsEnabled: false,
+      bot: {
+        api: {
+          setMyCommands,
+          sendMessage: vi.fn().mockResolvedValue(undefined),
+        },
+        command: vi.fn(),
+      } as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
+    });
 
-      expect(createUser).toHaveBeenCalledWith(
-        expect.objectContaining({
-          telegramUserId: 8521810561,
-          role: "owner",
-        }),
-      );
-      expect(reply).toHaveBeenCalledWith(expect.stringContaining("план: Owner"));
-    } finally {
-      if (typeof previousAdminIds === "undefined") {
-        delete process.env.ADMIN_TELEGRAM_IDS;
-      } else {
-        process.env.ADMIN_TELEGRAM_IDS = previousAdminIds;
-      }
-    }
-  });
-
-  it("clears stale trial expiry for existing admin owner on /plan", async () => {
-    const previousAdminIds = process.env.ADMIN_TELEGRAM_IDS;
-    process.env.ADMIN_TELEGRAM_IDS = "8521810561";
-    try {
-      const handlers: Record<string, (ctx: unknown) => Promise<void>> = {};
-      const userStore = buildUserStoreStub();
-      userStore.getUser = vi.fn().mockResolvedValue({
-        telegramUserId: 8521810561,
-        role: "owner",
-        trialExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-        createdAt: Date.now(),
-        messagesUsedToday: 0,
-        lastMessageDate: "2026-02-16",
-        totalMessagesUsed: 0,
-        totalTokensUsed: 0,
-        totalCostUsd: 0,
-      });
-      const updateUser = vi.fn().mockResolvedValue({
-        telegramUserId: 8521810561,
-        role: "owner",
-        trialExpiresAt: null,
-        createdAt: Date.now(),
-        messagesUsedToday: 0,
-        lastMessageDate: "2026-02-16",
-        totalMessagesUsed: 0,
-        totalTokensUsed: 0,
-        totalCostUsd: 0,
-      });
-      userStore.updateUser = updateUser as never;
-
-      registerTelegramNativeCommands({
-        ...buildParams({}, "default"),
-        nativeEnabled: false,
-        nativeSkillsEnabled: false,
-        bot: {
-          api: {
-            setMyCommands: vi.fn().mockResolvedValue(undefined),
-            sendMessage: vi.fn().mockResolvedValue(undefined),
-          },
-          command: vi.fn((name: string, handler: (ctx: unknown) => Promise<void>) => {
-            handlers[name] = handler;
-          }),
-        } as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
-        userStore,
-      });
-
-      const reply = vi.fn().mockResolvedValue(undefined);
-      await handlers.plan?.({
-        from: { id: 8521810561, first_name: "Dmitriy", username: "jicool" },
-        reply,
-      });
-
-      expect(updateUser).toHaveBeenCalledWith(8521810561, {
-        role: "owner",
-        trialExpiresAt: null,
-      });
-      expect(reply).toHaveBeenCalledWith(expect.stringContaining("План: Owner"));
-    } finally {
-      if (typeof previousAdminIds === "undefined") {
-        delete process.env.ADMIN_TELEGRAM_IDS;
-      } else {
-        process.env.ADMIN_TELEGRAM_IDS = previousAdminIds;
-      }
-    }
+    expect(setMyCommands).not.toHaveBeenCalled();
   });
 });

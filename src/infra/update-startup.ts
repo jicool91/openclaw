@@ -7,11 +7,16 @@ import { VERSION } from "../version.js";
 import { resolveOpenClawPackageRoot } from "./openclaw-root.js";
 import { normalizeUpdateChannel, DEFAULT_PACKAGE_CHANNEL } from "./update-channels.js";
 import { compareSemverStrings, resolveNpmChannelTag, checkUpdateStatus } from "./update-check.js";
+import { runGatewayUpdate } from "./update-runner.js";
 
 type UpdateCheckState = {
   lastCheckedAt?: string;
   lastNotifiedVersion?: string;
   lastNotifiedTag?: string;
+  lastAutoApplyAttemptVersion?: string;
+  lastAutoApplyAttemptTag?: string;
+  lastAutoApplyAttemptAt?: string;
+  lastAutoApplyStatus?: "ok" | "error" | "skipped";
 };
 
 const UPDATE_CHECK_FILENAME = "update-check.json";
@@ -108,6 +113,31 @@ export async function runGatewayUpdateCheck(params: {
       );
       nextState.lastNotifiedVersion = resolved.version;
       nextState.lastNotifiedTag = tag;
+    }
+
+    if (params.cfg.update?.autoApplyOnStart === true) {
+      const alreadyAttempted =
+        state.lastAutoApplyAttemptVersion === resolved.version &&
+        state.lastAutoApplyAttemptTag === tag;
+      if (!alreadyAttempted) {
+        params.log.info(`auto update start (${tag}): targeting v${resolved.version}`);
+        try {
+          const result = await runGatewayUpdate({ channel });
+          nextState.lastAutoApplyAttemptVersion = resolved.version;
+          nextState.lastAutoApplyAttemptTag = tag;
+          nextState.lastAutoApplyAttemptAt = new Date().toISOString();
+          nextState.lastAutoApplyStatus = result.status;
+
+          const suffix = result.reason ? ` (${result.reason})` : "";
+          params.log.info(`auto update result: ${result.status}${suffix}`);
+        } catch (err) {
+          nextState.lastAutoApplyAttemptVersion = resolved.version;
+          nextState.lastAutoApplyAttemptTag = tag;
+          nextState.lastAutoApplyAttemptAt = new Date().toISOString();
+          nextState.lastAutoApplyStatus = "error";
+          params.log.info(`auto update failed: ${String(err)}`);
+        }
+      }
     }
   }
 

@@ -46,7 +46,6 @@ import {
 } from "./bot/helpers.js";
 import { resolveTelegramFetch } from "./fetch.js";
 import { wasSentByBot } from "./sent-message-cache.js";
-import { UserStore } from "./user-store.js";
 
 export type TelegramBotOptions = {
   token: string;
@@ -64,10 +63,6 @@ export type TelegramBotOptions = {
     onUpdateId?: (updateId: number) => void | Promise<void>;
   };
 };
-
-const DEFAULT_TRIAL_EXPIRY_SWEEP_MS = 60 * 60 * 1000;
-const MIN_TRIAL_EXPIRY_SWEEP_MS = 60 * 1000;
-const activeTrialExpirySweepKeys = new Set<string>();
 
 export function getTelegramSequentialKey(ctx: {
   chat?: { id?: number };
@@ -155,48 +150,6 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   bot.catch((err) => {
     runtime.error?.(danger(`telegram bot error: ${formatUncaughtError(err)}`));
   });
-
-  // Initialize UserStore for subscription management (lazy load)
-  const dataDir = process.env.DATA_DIR ?? process.env.HOME ?? "/tmp";
-  const userStore = new UserStore(dataDir);
-  const userStorePath = `${dataDir}/.openclaw/users.db`;
-
-  // Load user store asynchronously (non-blocking)
-  Promise.resolve()
-    .then(async () => {
-      await userStore.load();
-      runtime.log?.(`telegram: user store loaded from ${userStorePath}`);
-    })
-    .catch((err) => {
-      runtime.error?.(danger(`telegram: failed to initialize user store: ${String(err)}`));
-    });
-
-  // Periodically materialize expired trials into role='expired' for analytics/admin stats.
-  if (!activeTrialExpirySweepKeys.has(userStorePath)) {
-    activeTrialExpirySweepKeys.add(userStorePath);
-    const configuredSweepMs = Number(process.env.TELEGRAM_TRIAL_EXPIRY_SWEEP_MS);
-    const trialExpirySweepMs =
-      Number.isFinite(configuredSweepMs) && configuredSweepMs >= MIN_TRIAL_EXPIRY_SWEEP_MS
-        ? Math.floor(configuredSweepMs)
-        : DEFAULT_TRIAL_EXPIRY_SWEEP_MS;
-    const runTrialExpirySweep = async (phase: "startup" | "interval") => {
-      try {
-        const expiredCount = await userStore.checkExpiredTrials();
-        if (expiredCount > 0) {
-          runtime.log?.(
-            `telegram: marked ${expiredCount} trial user${expiredCount > 1 ? "s" : ""} as expired (${phase})`,
-          );
-        }
-      } catch (err) {
-        runtime.error?.(danger(`telegram: trial expiry sweep failed: ${String(err)}`));
-      }
-    };
-    void runTrialExpirySweep("startup");
-    const sweepTimer = setInterval(() => {
-      void runTrialExpirySweep("interval");
-    }, trialExpirySweepMs);
-    sweepTimer.unref?.();
-  }
 
   const recentUpdates = createTelegramUpdateDedupe();
   let lastUpdateId =
@@ -407,7 +360,6 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     textLimit,
     opts,
     resolveBotTopicsEnabled,
-    userStore,
   });
 
   registerTelegramNativeCommands({
@@ -428,7 +380,6 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     resolveTelegramGroupConfig,
     shouldSkipUpdate,
     opts,
-    userStore,
   });
 
   // Handle emoji reactions to messages

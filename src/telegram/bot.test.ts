@@ -238,12 +238,8 @@ describe("createTelegramBot", () => {
       command: command.name,
       description: command.description,
     }));
-    // Subscription commands are added first, then native, then custom
-    const subscriptionCommandCount = 3; // /start, /plan, /subscribe
-    expect(
-      registered.slice(subscriptionCommandCount, subscriptionCommandCount + native.length),
-    ).toEqual(native);
-    expect(registered.slice(subscriptionCommandCount + native.length)).toEqual([
+    expect(registered.slice(0, native.length)).toEqual(native);
+    expect(registered.slice(native.length)).toEqual([
       { command: "custom_backup", description: "Git backup" },
       { command: "custom_generate", description: "Create an image" },
     ]);
@@ -311,9 +307,7 @@ describe("createTelegramBot", () => {
       command: string;
       description: string;
     }>;
-    // Subscription commands are added first, then custom commands
-    const subscriptionCommandCount = 3; // /start, /plan, /subscribe
-    expect(registered.slice(subscriptionCommandCount)).toEqual([
+    expect(registered).toEqual([
       { command: "custom_backup", description: "Git backup" },
       { command: "custom_generate", description: "Create an image" },
     ]);
@@ -805,16 +799,12 @@ describe("createTelegramBot", () => {
 
     createTelegramBot({ token: "tok" });
 
-    // Subscription commands are still registered even when native commands are disabled
+    // With native commands disabled, command list should be empty.
     const registered = setMyCommandsSpy.mock.calls[0]?.[0] as Array<{
       command: string;
       description: string;
     }>;
-    expect(registered).toEqual([
-      { command: "start", description: "Начать работу с ботом" },
-      { command: "plan", description: "Показать текущий план и статистику" },
-      { command: "subscribe", description: "Оформить подписку" },
-    ]);
+    expect(registered).toEqual([]);
   });
 
   it("skips group messages when requireMention is enabled and no mention matches", async () => {
@@ -2569,7 +2559,7 @@ describe("createTelegramBot", () => {
     });
 
     expect(replySpy).not.toHaveBeenCalled();
-    expect(sendMessageSpy).toHaveBeenCalledWith(
+    expect(sendMessageSpy).not.toHaveBeenCalledWith(
       12345,
       "You are not authorized to use this command.",
     );
